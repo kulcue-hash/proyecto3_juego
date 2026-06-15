@@ -1,3 +1,7 @@
+//// Andrés Felipe Martínez
+
+
+
 let board; // Definición de pantalla de juego
 const rows = 8; // Definición de tamaño de tablero
 const cols = 8;
