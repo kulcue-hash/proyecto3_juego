@@ -10,14 +10,17 @@ let swapAnimation = null; // Variable para almacenar información de animación 
 let gravityAnimating = false; // Variable para indicar si se está aplicando la animación de gravedad
 let waitingCascade = false; // retraso aplicado antes de buscar nuevos patrones después de aplicar gravedad
 let cascadeStartTime = 0; // Se guarda cuando empezó dicho retraso para posterior medida 
-const cascadeDelay = 800; // tiempo en milisegundos antes de buscar nuevos patrones 
+const cascadeDelay = 600; // tiempo en milisegundos antes de buscar nuevos patrones 
 let animationDuration = 250; // Se define duración de la animación ms
+const lockInterval = 3; // cantidad de movimientos entre bloqueos aleatorios
+let movesSinceLock = 0; // contador de movimientos realizados desde el último bloqueo
 
 // CLASE CANDY - Estrategia de Objetos de Celda
 class Candy {
   constructor(type) {
     this.type = type; // Índice del color del dulce
     this.fallOffsetY = 0; // Variable para almacenar desplazamiento vertical durante caidas
+    this.locked = false; // Si el dulce está bloqueado y no se puede mover
   }
 
   display({ row, col }) {
@@ -76,6 +79,13 @@ class Candy {
 
     //Se dibuja el ciruculo dado el centro relativo
     circle(cellLength / 2, cellLength / 2, cellLength * 0.8);
+
+    // Indicador visual de bloqueo
+    if (this.locked) {
+      noStroke();
+      fill(255);
+      rect(cellLength / 2, cellLength / 2, cellLength * 0.5, cellLength * 0.5, 6);
+    }
 
     pop(); // Restaurar estado de transformación para no afectar otros elementos dibujados en la celda o en otras celdas
   }
@@ -174,10 +184,39 @@ function updateAnimation() {
     // Intercambio real en memoria
     board.fill(swapAnimation.r2, swapAnimation.c2, swapAnimation.candy1);
     board.fill(swapAnimation.r1, swapAnimation.c1, swapAnimation.candy2);
+    // Guardar posiciones y referencias antes de limpiar la animación
+    const r1 = swapAnimation.r1;
+    const c1 = swapAnimation.c1;
+    const r2 = swapAnimation.r2;
+    const c2 = swapAnimation.c2;
+    const candy1 = swapAnimation.candy1;
+    const candy2 = swapAnimation.candy2;
     swapAnimation = null;
-    // Verificación de patrones después del intercambio
-    checkPattern();
+
+    // Verificación de patrones después del intercambio. Si no se encontró ningún patrón,
+    // revertimos el intercambio devolviendo los dulces a su lugar original.
+    const found = checkPattern();
+    if (!found) {
+      // Revertir intercambio en memoria
+      board.fill(r1, c1, candy1);
+      board.fill(r2, c2, candy2);
+    }
   }
+}
+
+function lockRandomCandy() { // Función para bloquear un dulce aleatorio 
+  let available = []; //Arreglo que almacenará corrdenadas y tipo de dulce que puede ser bloqueado
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      let candy = board.read(r, c);
+      if (candy && !candy.locked) {
+        available.push({ r, c, candy }); // Siempre que haya un dulce que no este bloqueado, este puede ser bloqueado
+      }
+    }
+  }
+  if (available.length === 0) return; // Si no hay dulces disponibles para bloquear, no se hace nada 
+  let choice = available[floor(random(available.length))]; // Se elige un dulce aleatorio a bloquear
+  choice.candy.locked = true; //se cambia el estado del dulce a bloqueado
 }
 
 // Intercambio de dulces
@@ -194,11 +233,18 @@ function mousePressed() {
 
   // Primer clic
   if (selected === null) {
+    let firstCandy = board.read(r, c);
+    if (firstCandy && firstCandy.locked) return; // No permitir seleccionar dulce bloqueado
     selected = { r: r, c: c };
     return; // Se finaliza la función para esperar el segundo clic
   }
 
   // Segundo clic
+  let secondCandy = board.read(r, c);
+  if (secondCandy && secondCandy.locked) {
+    selected = null; // Deseleccionar si el objetivo está bloqueado
+    return;
+  }
   // Una celda es adyacente si está a una distancia de 1 en fila o columna, pero no en ambas
   let isAdjacent = (abs(selected.r - r) === 1 && selected.c === c) ||
     (abs(selected.c - c) === 1 && selected.r === r);
@@ -220,7 +266,14 @@ function mousePressed() {
       dy: (r - selected.r) * Quadrille.cellLength, // Distancia a recorrer en y
       startTime: millis() // Tiempo de inicio de la animación
     };
+
+    movesSinceLock += 1; //Cada vez que se realiza un intercambio se cuenta un movimieto
+    if (movesSinceLock >= lockInterval) { //alcanzada la cantidad de movimientos, se bloquea un dulce
+      lockRandomCandy();
+      movesSinceLock = 0; // Se reinicia el contador
+    }
   }
+
 
   selected = null; // Reinicio de variable para próximo intercambio 
 }
@@ -284,7 +337,10 @@ function checkPattern() {
   // Solo iniciar gravedad si hubo eliminaciones
   if (toRemove.length > 0) {
     gravityAnimating = true;
+    return true; // La función retorna true si se encontró al menos una coincidencia
   }
+  return false; //Si no se encontró ninguna coincidencia, la función retorna false
+  // Este booleano es empleado para si se revierte o no un intercambio 
 }
 
 function applyGravity() { // Función para aplicar gravedad a los dulces después de eliminaciones
