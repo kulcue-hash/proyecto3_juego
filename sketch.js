@@ -1,9 +1,13 @@
 let board; // Definición de pantalla de juego
+let game;     // Pantalla principal
 const rows = 8; // Definición de tamaño de tablero
 const cols = 8;
 let candyColors; // Arreglo para almacenar los colores de los dulces
 let selected = null; // Variable para almacenar la posición del primer dulce seleccionado
 let points = 0; // Variable para almacenar puntos en cada revisión
+let gameState = "playing"; // Menu, niveles, jugando, confirmar, ganar
+let btnPlay;
+
 
 // Variables para animaciones
 let swapAnimation = null; // Variable para almacenar información de animación de intercambio
@@ -12,6 +16,84 @@ let waitingCascade = false; // retraso aplicado antes de buscar nuevos patrones 
 let cascadeStartTime = 0; // Se guarda cuando empezó dicho retraso para posterior medida 
 const cascadeDelay = 800; // tiempo en milisegundos antes de buscar nuevos patrones 
 let animationDuration = 250; // Se define duración de la animación ms
+
+  class Button{
+      constructor(x, y, w, h, label, onClick){
+          this.x = x; // Posición del boton en x
+          this.y = y; // Posicion del boton en y
+          this.w = w; // ancho del boton
+          this.h = h; // Alto del boton 
+          this.label = label; // Texto del boton
+          this.onClick = onClick; // Que hace el boton cuando se oprime
+
+          this.baseColor = [70, 130, 180, 180]; // color con transparencia para el boton
+          this.hoverColor = [100, 160, 220, 220]; // más claro al pasar mouse
+          this.textColor = [255, 255, 255];
+          this.radius = 12;
+      }
+
+      show (){
+        let isHover = this.isHover(mouseX, mouseY);
+        
+        //Si esta en el boton el mouse que sea gris
+        if (isHover){
+          fill(255, 100);
+        } 
+        // sino esta que este normal
+        else{
+          fill(200, 50);
+        }
+        stroke(0); // El contorno negro
+        rect(this.x, this.y, this.w, this.h);
+
+        // Texto
+        fill(255);
+        noStroke();
+        textAlign(CENTER, CENTER);
+        textSize(18);
+        text(this.label, this.x + this.w/2, this.y + this.h/2);
+      }
+
+      // Detecta si el mouse esta encima del boton
+      isHover(mx, my){
+          return mx > this.x && mx < this.x + this.w && my > this.y && my < this.y + this.h; 
+      }
+
+      // Ejecuta la acción si da click en el boton
+      handleClick(){
+          if(this.isHover(mouseX, mouseY)){
+              this.onClick();
+          }
+      }
+  }
+
+  function createButtons(){
+      btnPlay = new Button(width/2 - 75, height/2, 150, 50, "Jugar", () => {
+      gameState = "playing";
+    });
+      /*btnReset = new Button(0, 0, 120, 37, "Inicio", () => { // el bot
+      gameState = "menu";
+    });*/
+    
+  btnReset = new Button(0, 0, 140, 45, "Inicio", () => {
+
+  // Reiniciar variables
+  attempts = 5;
+  currentLevel = 1;
+  attemptsLevel = 0;
+
+  timeline = [];
+  waiting = false;
+  changed = false;
+
+  // Volver a cargar nivel 1
+  loadLevel(currentLevel);
+
+  // Volver al menú
+  gameState = "menu";
+});
+  }
+
 
 // CLASE CANDY - Estrategia de Objetos de Celda
 class Candy {
@@ -137,11 +219,38 @@ function setup() {
       board.fill(r, c, new Candy(validType)); // Se llena la posición actual del tablero con el tipo de dulce
     }
   }
+  createButtons();
 }
 
 
 function draw() {
+  drawBackground();
+  switch(gameState){
+          case "menu":
+              drawMenu();
+              break;
+          case "playing":
+              drawPlaying()
+              break;
+      }
+}
 
+function drawBackground(){
+      clear();
+  }
+
+function drawMenu(){
+      push();
+      textAlign(CENTER);
+      fill(255, 255, 255);
+      textSize(40);
+      text("Tales colores", width/2, height/2 - 100);
+      pop();
+      btnPlay.show();
+      
+  }
+
+function drawPlaying(){
   background(40); // Fondo del juego
   drawQuadrille(board);  // Dibujo del tablero con los objetos Candy, cada uno se dibuja según su método display
   updateAnimation(); // Siempre que haya un intercambio en proceso, se actualiza la animación
@@ -163,6 +272,7 @@ function draw() {
     checkPattern(); // Se buscan nuevos patrones
   }
 }
+
 
 // Función para actualizar la animación de intercambio
 function updateAnimation() {
