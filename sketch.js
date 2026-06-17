@@ -1,7 +1,3 @@
-//// Andrés Felipe Martínez
-
-
-
 let board; // Definición de pantalla de juego
 let game;     // Pantalla principal
 const rows = 8; // Definición de tamaño de tablero
@@ -288,7 +284,7 @@ function updateAnimation() {
     // Intercambio real en memoria
     board.fill(swapAnimation.r2, swapAnimation.c2, swapAnimation.candy1);
     board.fill(swapAnimation.r1, swapAnimation.c1, swapAnimation.candy2);
-    selected = null;
+    selected = null;  
     swapAnimation = null;
     // Verificación de patrones después del intercambio
     checkPattern();
