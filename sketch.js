@@ -1,3 +1,7 @@
+//// Andrés Felipe Martínez
+
+
+
 let board; // Definición de pantalla de juego
 let game;     // Pantalla principal
 const rows = 8; // Definición de tamaño de tablero
