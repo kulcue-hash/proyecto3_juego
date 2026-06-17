@@ -5,7 +5,7 @@ const cols = 8;
 let candyColors; // Arreglo para almacenar los colores de los dulces
 let selected = null; // Variable para almacenar la posición del primer dulce seleccionado
 let points = 0; // Variable para almacenar puntos en cada revisión
-let gameState = "playing"; // Menu, niveles, jugando, confirmar, ganar
+let gameState = "menu"; // Menu, niveles, jugando, confirmar, ganar
 let btnPlay;
 
 
@@ -284,6 +284,7 @@ function updateAnimation() {
     // Intercambio real en memoria
     board.fill(swapAnimation.r2, swapAnimation.c2, swapAnimation.candy1);
     board.fill(swapAnimation.r1, swapAnimation.c1, swapAnimation.candy2);
+    selected = null;
     swapAnimation = null;
     // Verificación de patrones después del intercambio
     checkPattern();
@@ -292,8 +293,16 @@ function updateAnimation() {
 
 // Intercambio de dulces
 function mousePressed() {
+  if (swapAnimation || gravityAnimating) return;
 
-  // No permitir clics durante la animación
+  switch(gameState) {
+
+     case "menu":
+      btnPlay.handleClick();
+      break;
+
+     case "playing":
+      // No permitir clics durante la animación
   if (gravityAnimating) return;
   if (swapAnimation) return;
   // Lectura de coordenadas de celda
@@ -332,7 +341,7 @@ function mousePressed() {
     };
   }
 
-  selected = null; // Reinicio de variable para próximo intercambio 
+}
 }
 
 //Detección de patrones
