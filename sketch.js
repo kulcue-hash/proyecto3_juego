@@ -309,6 +309,18 @@ function applyGravity() { // Función para aplicar gravedad a los dulces despué
       }
     }
   }
+
+  // Rellenar los huecos restantes con nuevos dulces que vienen desde arriba (aleatorios)
+  for (let c = 0; c < cols; c++) {
+    for (let r = 0; r < rows; r++) {
+      if (board.read(r, c) === null) {
+        let type = floor(random(candyColors.length));
+        let newCandy = new Candy(type);
+        newCandy.fallOffsetY = - (r + 1) * Quadrille.cellLength; // empieza por encima del tablero y caerá hasta su fila
+        board.fill(r, c, newCandy);
+      }
+    }
+  }
 }
 
 function gravityFinished() {
