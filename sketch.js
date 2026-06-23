@@ -14,7 +14,7 @@ let swapAnimation = null; // Variable para almacenar información de animación 
 let gravityAnimating = false; // Variable para indicar si se está aplicando la animación de gravedad
 let waitingCascade = false; // retraso aplicado antes de buscar nuevos patrones después de aplicar gravedad
 let cascadeStartTime = 0; // Se guarda cuando empezó dicho retraso para posterior medida 
-const cascadeDelay = 800; // tiempo en milisegundos antes de buscar nuevos patrones 
+const cascadeDelay = 150; // tiempo en milisegundos antes de buscar nuevos patrones 
 let animationDuration = 250; // Se define duración de la animación ms
 
   class Button{
