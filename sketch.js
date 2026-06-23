@@ -14,7 +14,7 @@ let swapAnimation = null; // Variable para almacenar información de animación 
 let gravityAnimating = false; // Variable para indicar si se está aplicando la animación de gravedad
 let waitingCascade = false; // retraso aplicado antes de buscar nuevos patrones después de aplicar gravedad
 let cascadeStartTime = 0; // Se guarda cuando empezó dicho retraso para posterior medida 
-const cascadeDelay = 150; // tiempo en milisegundos antes de buscar nuevos patrones 
+const cascadeDelay = 15; // ¡OPTIMIZADO! tiempo en milisegundos antes de buscar nuevos patrones (antes 150)
 let animationDuration = 250; // Se define duración de la animación ms
 
   class Button{
@@ -163,6 +163,60 @@ class Candy {
   }
 }
 
+// NUEVA CLASE: Implementación de Herencias para dulces especiales
+class SpecialCandy extends Candy {
+  constructor(type) {
+    super(type); // Heredamos el tipo de dulce de la clase padre
+  }
+
+  // Sobreescribimos el display para añadir los efectos pendientes de la eliminación de piezas
+  display({ row, col }) {
+    let cellLength = Quadrille.cellLength;
+    let offsetX = 0; 
+    let offsetY = this.fallOffsetY;
+
+    // Calculos de caída y animaciones base heredados de forma manual para evitar romper el push/pop
+    if (abs(this.fallOffsetY) > 0.5) {
+      this.fallOffsetY = lerp(this.fallOffsetY, 0, 0.1);
+    } else {
+      this.fallOffsetY = 0;
+    }
+
+    if (swapAnimation) {
+      let t = constrain((millis() - swapAnimation.startTime) / animationDuration, 0, 1);
+      if (this === swapAnimation.candy1) {
+        offsetX = lerp(0, swapAnimation.dx, t);
+        offsetY += lerp(0, swapAnimation.dy, t);
+      }
+      if (this === swapAnimation.candy2) {
+        offsetX = lerp(0, -swapAnimation.dx, t);
+        offsetY += lerp(0, -swapAnimation.dy, t);
+      }
+    }
+
+    push();
+    translate(offsetX, offsetY);
+    fill(candyColors[this.type]);
+    
+    if (selected && selected.r === row && selected.c === col) {
+      stroke(0);
+      strokeWeight(6);
+    } else {
+      noStroke();
+    }
+    circle(cellLength / 2, cellLength / 2, cellLength * 0.8);
+    
+    // --- EFECTO VISUAL DEL DULCE ESPECIAL ---
+    fill(255, 200); // Blanco semitransparente
+    noStroke();
+    rectMode(CENTER);
+    rect(cellLength / 2, cellLength / 2, cellLength * 0.3, cellLength * 0.3); // Un centro brillante para destacarlo
+    
+    pop();
+  }
+}
+
+
 // Función para obtener un tipo de dulce válido que no forme patrones
 function getValidCandy(row, col) {
   let validTypes = []; // Arreglo para almacenar tipos válidos para la posición actual
@@ -225,7 +279,7 @@ function setup() {
 
 function draw() {
   drawBackground();
-  switch(gameState){
+  switch(gameState){ // Máquina de estados oficial
           case "menu":
               drawMenu();
               break;
@@ -317,7 +371,11 @@ function mousePressed() {
     return; // Se finaliza la función para esperar el segundo clic
   }
 
-  // Segundo clic
+  // Deseleccionar si se hace clic en la misma ficha 
+  if (selected.r === r && selected.c === c) {
+    selected = null; 
+    return;}
+  // Segundo clic (Intercambio)
   // Una celda es adyacente si está a una distancia de 1 en fila o columna, pero no en ambas
   let isAdjacent = (abs(selected.r - r) === 1 && selected.c === c) ||
     (abs(selected.c - c) === 1 && selected.r === r);
@@ -367,11 +425,17 @@ function checkPattern() {
       let candy1 = board.read(r, c);
       let candy2 = board.read(r, c + 1);
       let candy3 = board.read(r, c + 2); //Se leen los 3 dulces consecutivos
+      let candy4 = (c <= cols - 4) ? board.read(r, c + 3) : null; // Se lee el 4to dulce posible
 
       if (candy1 && candy2 && candy3 && candy1.type === candy2.type && candy2.type === candy3.type) { //Si son iguales
         addUnique(toRemove, r, c);
         addUnique(toRemove, r, c + 1);
         addUnique(toRemove, r, c + 2); // Se agregan al arreglo de elementos a eliminar
+        
+        if (candy4 && candy3.type === candy4.type) { // Si además se detectan 4
+            addUnique(toRemove, r, c + 3);
+            candy1.makeSpecial = true; // Se marca la pieza para herencia
+        }
       }
     }
   }
@@ -383,23 +447,34 @@ function checkPattern() {
       let candy1 = board.read(r, c);
       let candy2 = board.read(r + 1, c);
       let candy3 = board.read(r + 2, c);
+      let candy4 = (r <= rows - 4) ? board.read(r + 3, c) : null; // Se lee el 4to dulce posible
 
       if (candy1 && candy2 && candy3 && candy1.type === candy2.type && candy2.type === candy3.type) {
         addUnique(toRemove, r, c);
         addUnique(toRemove, r + 1, c);
         addUnique(toRemove, r + 2, c);
+        
+        if (candy4 && candy3.type === candy4.type) { // Si además se detectan 4
+            addUnique(toRemove, r + 3, c);
+            candy1.makeSpecial = true; // Se marca la pieza para herencia
+        }
       }
     }
   }
-  //Eliminar dulces
+  
+  //Eliminar dulces e instanciar especiales
   for (let pos of toRemove) { //Se recorren coordenadas almacenadas
-
-    board.fill( //Se eliminan los dulces llenando su posición con null
-      pos.r,
-      pos.c,
-      null
-    );
+    let currentCandy = board.read(pos.r, pos.c);
+    
+    if (currentCandy && currentCandy.makeSpecial) {
+       // Si se combinaron 4, rellenamos esa celda heredando el dulce especial
+       board.fill(pos.r, pos.c, new SpecialCandy(currentCandy.type));
+    } else {
+       //Se eliminan los dulces normales llenando su posición con null
+       board.fill(pos.r, pos.c, null);
+    }
   }
+  
   // Solo iniciar gravedad si hubo eliminaciones
   if (toRemove.length > 0) {
     gravityAnimating = true;
