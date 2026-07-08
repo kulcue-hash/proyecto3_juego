@@ -23,6 +23,17 @@ let cascadeStartTime = 0; // Se guarda cuando empezó dicho retraso para posteri
 const cascadeDelay = 15; // tiempo en milisegundos antes de buscar nuevos patrones
 let animationDuration = 250; // Se define duración de la animación ms
 
+let boardX;
+let boardY;
+let menuBackground;
+let gameBackground;
+
+function preload(){
+
+    menuBackground = loadImage("menu.jpg");
+    gameBackground= loadImage("canva.jpeg");
+
+}
   class Button{
       constructor(x, y, w, h, label, onClick){
           this.x = x; // Posición del boton en x
@@ -32,7 +43,7 @@ let animationDuration = 250; // Se define duración de la animación ms
           this.label = label; // Texto del boton
           this.onClick = onClick; // Que hace el boton cuando se oprime
 
-          this.baseColor = [70, 130, 180, 180]; // color con transparencia para el boton
+          this.baseColor = [0, 0, 255, 0]; // color con transparencia para el boton
           this.hoverColor = [100, 160, 220, 220]; // más claro al pasar mouse
           this.textColor = [255, 255, 255];
           this.radius = 12;
@@ -77,7 +88,7 @@ let animationDuration = 250; // Se define duración de la animación ms
 
   function createButtons(){
       // Botón del Menú
-      btnPlay = new Button(width/2 - 75, height/2, 150, 50, "Jugar", () => {
+      btnPlay = new Button(width/2-130, height/2+165, 150, 50, "Jugar", () => {
         gameState = "playing";
       });
       
@@ -101,8 +112,8 @@ class Candy {
 
   display({ row, col }) {
     let cellLength = Quadrille.cellLength;
-    let offsetX = 0; 
-    let offsetY = this.fallOffsetY;
+    let offsetX = 0; // Se aplica el desplazamiento horizontal para la animación de intercambio
+    let offsetY = this.fallOffsetY; // Se aplica el desplazamiento vertical para la animación de caída
 
     // Animación de caída
     if (abs(this.fallOffsetY) > 0.5) {
@@ -129,7 +140,7 @@ class Candy {
 
     fill(candyColors[this.type]);
     if (selected && selected.r === row && selected.c === col) {
-      stroke(255); // Borde blanco brillante para selección
+      stroke(0); // Borde blanco brillante para selección
       strokeWeight(4);
     } else {
       noStroke();
@@ -220,8 +231,7 @@ function getValidCandy(row, col) {
 function setup() {
   Quadrille.cellLength = 60;
   // Hacemos el canvas un poco más alto para poner UI arriba
-  createCanvas(cols * Quadrille.cellLength, (rows * Quadrille.cellLength) + 60);
-
+  createCanvas(windowWidth, windowHeight);
   candyColors = [color(255, 50, 50), color(50, 255, 50), color(50, 100, 255), color(255, 255, 50), color(200, 50, 255)]; 
 
   board = createQuadrille(cols, rows);
@@ -256,24 +266,20 @@ function draw() {
 
 
 function drawMenu(){
-      background(30, 20, 50); // Fondo morado oscuro estético
+      image(gameBackground,0,0,width,height);
       
       push();
       textAlign(CENTER);
       
       // Sombra del título
       fill(0, 150);
-      textSize(50);
-      text("Tales colores", width/2 + 3, height/2 - 100 + 3);
+      textSize(30);
+      text("¡Combina 3 o más para ganar!", width/2 - 60 + 3, height/2 + 110 + 3);
       
       // Título principal
       fill(255, 200, 250); // Texto rosita claro
-      text("Tales colores", width/2, height/2 - 100);
-      
-      // Subtítulo
-      textSize(20);
-      fill(200);
-      text("¡Combina 3 o más para ganar!", width/2, height/2 - 40);
+      text("¡Combina 3 o más para ganar!", width/2-60, height/2 + 110);
+
       pop();
       
       btnPlay.show();
@@ -297,28 +303,38 @@ function drawWin() {
 }
 
 function drawPlaying(){
-  background(40); // Fondo del juego
-  
+
+  image(gameBackground,0,0,width,height);
+  boardX = (width - cols * Quadrille.cellLength) / 2;
+  boardY = 140;
   //UI del Juego 
   push();
-  fill(30);
-  rect(0, 0, width, 60); // Barra superior
+  fill(10, 10, 10, 210); // Fondo semitransparente para la barra superior
+  rect(0, 0, width, 100); // Barra superior
+  translate(0, 30); // Ajustamos el texto para que quede centrado verticalmente
   fill(255);
   textSize(18);
   textAlign(LEFT, CENTER);
-  text("Nivel: " + currentLevel, 10, 30);
+  text("Nivel: " + currentLevel, 40, 30);
   textAlign(CENTER, CENTER);
   text("Meta: " + targetScore, width/2, 30);
   textAlign(RIGHT, CENTER);
-  text("Puntos: " + points, width - 10, 30);
+  text("Puntos: " + points, width - 40, 30);
   pop();
+  push();
+
+fill(0, 0, 0  , 110);   // blanco con transparencia
+stroke(255, 120);
+strokeWeight(2);
+rect(boardX,boardY,cols * Quadrille.cellLength,rows * Quadrille.cellLength, 0); // Fondo del tablero con bordes redondeados
+pop();
 
   push();
-  translate(0, 60); // Desplazamos el tablero hacia abajo para dejar espacio a la UI
-  drawQuadrille(board);  
+  translate(boardX, boardY); // Desplazamos el tablero hacia abajo para dejar espacio a la UI
+  drawQuadrille(board);
   updateAnimation(); 
 
-  if (gravityAnimating) { 
+  if (gravityAnimating) {
     applyGravity(); 
     if (gravityFinished()) { 
       gravityAnimating = false; 
@@ -373,10 +389,10 @@ function mousePressed() {
       if (swapAnimation) return;
       
       // Lectura de coordenadas ajustadas por la barra superior de UI
-      const r = floor((mouseY - 60) / Quadrille.cellLength);
-      const c = floor(mouseX / Quadrille.cellLength);
+      const r = floor((mouseY - boardY) / Quadrille.cellLength);
+      const c = floor((mouseX - boardX) / Quadrille.cellLength);
       
-      if (!board.isValid(r, c) || mouseY < 60) return;
+      if (!board.isValid(r, c) || mouseY < boardY) return;
 
       let clickedCandy = board.read(r, c); // Leemos qué dulce hay en esa casilla
 
