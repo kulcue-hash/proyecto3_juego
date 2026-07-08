@@ -4,9 +4,15 @@ const rows = 8; // Definición de tamaño de tablero
 const cols = 8;
 let candyColors; // Arreglo para almacenar los colores de los dulces
 let selected = null; // Variable para almacenar la posición del primer dulce seleccionado
-let points = 0; // Variable para almacenar puntos en cada revisión
-let gameState = "menu"; // Menu, niveles, jugando, confirmar, ganar
+
+// --- VARIABLES DE NIVELES Y PUNTAJE ---
+let points = 0; 
+let currentLevel = 1;
+let targetScore = 300; // Puntos necesarios para pasar el nivel 1
+
+let gameState = "menu"; // menu, playing, win
 let btnPlay;
+let btnNextLevel; // Botón para la pantalla de victoria
 
 
 // Variables para animaciones
@@ -14,9 +20,20 @@ let swapAnimation = null; // Variable para almacenar información de animación 
 let gravityAnimating = false; // Variable para indicar si se está aplicando la animación de gravedad
 let waitingCascade = false; // retraso aplicado antes de buscar nuevos patrones después de aplicar gravedad
 let cascadeStartTime = 0; // Se guarda cuando empezó dicho retraso para posterior medida 
-const cascadeDelay = 800; // tiempo en milisegundos antes de buscar nuevos patrones 
+const cascadeDelay = 15; // tiempo en milisegundos antes de buscar nuevos patrones
 let animationDuration = 250; // Se define duración de la animación ms
 
+let boardX;
+let boardY;
+let menuBackground;
+let gameBackground;
+
+function preload(){
+
+    menuBackground = loadImage("menu.jpg");
+    gameBackground= loadImage("canva.jpeg");
+
+}
   class Button{
       constructor(x, y, w, h, label, onClick){
           this.x = x; // Posición del boton en x
@@ -26,7 +43,7 @@ let animationDuration = 250; // Se define duración de la animación ms
           this.label = label; // Texto del boton
           this.onClick = onClick; // Que hace el boton cuando se oprime
 
-          this.baseColor = [70, 130, 180, 180]; // color con transparencia para el boton
+          this.baseColor = [0, 0, 255, 0]; // color con transparencia para el boton
           this.hoverColor = [100, 160, 220, 220]; // más claro al pasar mouse
           this.textColor = [255, 255, 255];
           this.radius = 12;
@@ -37,20 +54,22 @@ let animationDuration = 250; // Se define duración de la animación ms
         
         //Si esta en el boton el mouse que sea gris
         if (isHover){
-          fill(255, 100);
+          fill(255, 150); // Un poco más brillante en hover
         } 
         // sino esta que este normal
         else{
-          fill(200, 50);
+          fill(200, 80);
         }
-        stroke(0); // El contorno negro
-        rect(this.x, this.y, this.w, this.h);
+        stroke(255); // Contorno blanco para verse más limpio
+        strokeWeight(2);
+        rectMode(CORNER);
+        rect(this.x, this.y, this.w, this.h, this.radius); // Bordes redondeados
 
         // Texto
         fill(255);
         noStroke();
         textAlign(CENTER, CENTER);
-        textSize(18);
+        textSize(20);
         text(this.label, this.x + this.w/2, this.y + this.h/2);
       }
 
@@ -68,30 +87,19 @@ let animationDuration = 250; // Se define duración de la animación ms
   }
 
   function createButtons(){
-      btnPlay = new Button(width/2 - 75, height/2, 150, 50, "Jugar", () => {
-      gameState = "playing";
-    });
-      /*btnReset = new Button(0, 0, 120, 37, "Inicio", () => { // el bot
-      gameState = "menu";
-    });*/
-    
-  btnReset = new Button(0, 0, 140, 45, "Inicio", () => {
-
-  // Reiniciar variables
-  attempts = 5;
-  currentLevel = 1;
-  attemptsLevel = 0;
-
-  timeline = [];
-  waiting = false;
-  changed = false;
-
-  // Volver a cargar nivel 1
-  loadLevel(currentLevel);
-
-  // Volver al menú
-  gameState = "menu";
-});
+      // Botón del Menú
+      btnPlay = new Button(width/2-130, height/2+165, 150, 50, "Jugar", () => {
+        gameState = "playing";
+      });
+      
+      // Botón de Siguiente Nivel (Pantalla de Victoria)
+      btnNextLevel = new Button(width/2 - 100, height/2 + 50, 200, 50, "Siguiente Nivel", () => {
+        currentLevel++;          // Subimos de nivel
+        targetScore += 200;      // Aumentamos la dificultad
+        points = 0;              // Reiniciamos los puntos
+        initBoard();             // Volvemos a llenar el tablero
+        gameState = "playing";   // Volvemos a jugar
+      });
   }
 
 
@@ -104,194 +112,265 @@ class Candy {
 
   display({ row, col }) {
     let cellLength = Quadrille.cellLength;
-
-    let offsetX = 0; // Variables para almacenar el desplazamiento actual del dulce durante la animación
-    let offsetY = this.fallOffsetY;
+    let offsetX = 0; // Se aplica el desplazamiento horizontal para la animación de intercambio
+    let offsetY = this.fallOffsetY; // Se aplica el desplazamiento vertical para la animación de caída
 
     // Animación de caída
-    if (abs(this.fallOffsetY) > 0.5) { //Al lerp interpolar hacia cero, podrían tenerse valores negativos. Cuando se llega a un valor lo suficientemente cercano a cero, se establece el desplazamiento en cero para finalizar
-
-      this.fallOffsetY =
-        lerp(this.fallOffsetY, 0, 0.1); // Interpolación lineal, falloffsetY se mueve un 10% del camino hacia cero cada frame, creando un efecto de desaceleración a medida que se acerca al destino final
-
+    if (abs(this.fallOffsetY) > 0.5) {
+      this.fallOffsetY = lerp(this.fallOffsetY, 0, 0.1); 
     } else {
-
       this.fallOffsetY = 0;
     }
 
     // Si existe una animación activa
     if (swapAnimation) {
-
-      let t = constrain( // Normalización del tiempo transcurrido desde el inicio de la animación
-        (millis() - swapAnimation.startTime) /
-        animationDuration,
-        0,
-        1 // El valor de t va de 0 a 1 durante la animación, lo que permite interpolar el movimiento de los dulces
-      );
-
-      // Dulce que sale desde la celda seleccionada
+      let t = constrain((millis() - swapAnimation.startTime) / animationDuration, 0, 1);
       if (this === swapAnimation.candy1) {
-        offsetX = lerp(0, swapAnimation.dx, t); // Interpolación lineal para calcular el desplazamiento actual en x e y dependiendo el tiempo transcurrido
+        offsetX = lerp(0, swapAnimation.dx, t); 
         offsetY += lerp(0, swapAnimation.dy, t);
       }
-
-      // Dulce que sale desde la segunda celda
-      if (this === swapAnimation.candy2) { // Para el segundo dulce el desplazamiento será en sentido contrario
+      if (this === swapAnimation.candy2) { 
         offsetX = lerp(0, -swapAnimation.dx, t);
         offsetY += lerp(0, -swapAnimation.dy, t);
       }
     }
 
-    push(); // Guardar estado actual de transformación
+    push(); 
+    translate(offsetX, offsetY); 
 
-    translate(offsetX, offsetY); //Cambio de sistema de coordenadas para aplicar el desplazamiento durante la animación
-
-    // Se le asigna el color correspondiente al tipo de dulce
     fill(candyColors[this.type]);
-    // Si esta celda coincide con la seleccionada, le ponemos borde
     if (selected && selected.r === row && selected.c === col) {
-      stroke(0);
-      strokeWeight(6);
+      stroke(0); // Borde blanco brillante para selección
+      strokeWeight(4);
     } else {
       noStroke();
     }
-
-    //Se dibuja el ciruculo dado el centro relativo
     circle(cellLength / 2, cellLength / 2, cellLength * 0.8);
-
-    pop(); // Restaurar estado de transformación para no afectar otros elementos dibujados en la celda o en otras celdas
+    pop(); 
   }
 }
 
-// Función para obtener un tipo de dulce válido que no forme patrones
+// Implementación de Herencias para dulces especiales
+class SpecialCandy extends Candy {
+  constructor(type) {
+    super(type); 
+  }
+
+  display({ row, col }) {
+    let cellLength = Quadrille.cellLength;
+    let offsetX = 0; 
+    let offsetY = this.fallOffsetY;
+
+    if (abs(this.fallOffsetY) > 0.5) {
+      this.fallOffsetY = lerp(this.fallOffsetY, 0, 0.1);
+    } else {
+      this.fallOffsetY = 0;
+    }
+
+    if (swapAnimation) {
+      let t = constrain((millis() - swapAnimation.startTime) / animationDuration, 0, 1);
+      if (this === swapAnimation.candy1) {
+        offsetX = lerp(0, swapAnimation.dx, t);
+        offsetY += lerp(0, swapAnimation.dy, t);
+      }
+      if (this === swapAnimation.candy2) {
+        offsetX = lerp(0, -swapAnimation.dx, t);
+        offsetY += lerp(0, -swapAnimation.dy, t);
+      }
+    }
+
+    push();
+    translate(offsetX, offsetY);
+    fill(candyColors[this.type]);
+    
+    if (selected && selected.r === row && selected.c === col) {
+      stroke(255);
+      strokeWeight(4);
+    } else {
+      noStroke();
+    }
+    circle(cellLength / 2, cellLength / 2, cellLength * 0.8);
+    
+    //EFECTO VISUAL DEL DULCE ESPECIAL
+    fill(255, 200); 
+    noStroke();
+    rectMode(CENTER);
+    rect(cellLength / 2, cellLength / 2, cellLength * 0.3, cellLength * 0.3); 
+    pop();
+  }
+}
+
+
 function getValidCandy(row, col) {
-  let validTypes = []; // Arreglo para almacenar tipos válidos para la posición actual
+  let validTypes = []; 
+  for (let type = 0; type < candyColors.length; type++) { 
+    let isValid = true; 
 
-  for (let type = 0; type < candyColors.length; type++) { // Se itera sobre cada tipo de dulce
-    let isValid = true; // Variable que verifica si el tipo de dulce actual es válido
-
-    // Verificar horizontal (3 en línea hacia la izquierda)
-    if (col >= 2) { // Si estamos en una posición mayor a la tercera columna
-      let c1 = board.read(row, col - 1); // SE leen los dos dulces a la izquierda de la posición actual
+    if (col >= 2) { 
+      let c1 = board.read(row, col - 1); 
       let c2 = board.read(row, col - 2);
       if (c1 && c2 && c1.type === type && c2.type === type) {
-        isValid = false; // Si hay coincidencia en el tipo, el dulce revisado no es válido para esa posición
+        isValid = false; 
       }
     }
-
-    // Verificar vertical (3 en línea hacia arriba)
-    if (isValid && row >= 2) { // Si estamos en una posición mayor a la tercera fila
-      let c1 = board.read(row - 1, col); // Se leen los dos dulces por encima de la posición actual
+    if (isValid && row >= 2) { 
+      let c1 = board.read(row - 1, col); 
       let c2 = board.read(row - 2, col);
       if (c1 && c2 && c1.type === type && c2.type === type) {
-        isValid = false; // Si hay coincidencia en el tipo, el dulce revisado no es válido para esa posición
+        isValid = false; 
       }
     }
-
     if (isValid) {
-      validTypes.push(type); // Siempre que sea válido el dulce, se guarda su tipo
+      validTypes.push(type); 
     }
   }
-  // Siempre que haya almenos un tipo de dulce válido, se retorna uno de los válidos aleatoriamente
-
-
   return validTypes[floor(random(validTypes.length))];
 }
 
-//SETUP
+// SETUP
 function setup() {
-  // Tamaño de cada celda
   Quadrille.cellLength = 60;
+  // Hacemos el canvas un poco más alto para poner UI arriba
+  createCanvas(windowWidth, windowHeight);
+  candyColors = [color(255, 50, 50), color(50, 255, 50), color(50, 100, 255), color(255, 255, 50), color(200, 50, 255)]; 
 
-  // Se crea el lienzo dependiendo del tamaño de la celda y de la cantidad de celdas
-  createCanvas(cols * Quadrille.cellLength, rows * Quadrille.cellLength);
-
-  // Definimos los 5 colores para los dulces
-  candyColors = [color(255, 50, 50), color(50, 255, 50), color(50, 100, 255), color(255, 255, 50), color(200, 50, 255)]; // Rojo, verde, azul, amarillo, morado   
-
-  // Una sola cuadrícula para el juego(estados agregados)
   board = createQuadrille(cols, rows);
-
-  // Se llena el tablero con instancias del objeto Candy de forma inteligente sin patrones iniciales
-  for (let r = 0; r < rows; r++) { //Se recorre cada fila
-    for (let c = 0; c < cols; c++) { // Se recorre cada columna
-      let validType = getValidCandy(r, c); // Se obtiene un tipo de dulce válido para la posición actual
-      board.fill(r, c, new Candy(validType)); // Se llena la posición actual del tablero con el tipo de dulce
-    }
-  }
+  initBoard(); // Llenamos el tablero
   createButtons();
 }
 
+// Función separada para poder reiniciar el tablero en cada nivel
+function initBoard() {
+  board.clear();
+  for (let r = 0; r < rows; r++) { 
+    for (let c = 0; c < cols; c++) { 
+      let validType = getValidCandy(r, c); 
+      board.fill(r, c, new Candy(validType)); 
+    }
+  }
+}
 
 function draw() {
-  drawBackground();
-  switch(gameState){
+  switch(gameState){ 
           case "menu":
               drawMenu();
               break;
           case "playing":
-              drawPlaying()
+              drawPlaying();
+              break;
+          case "win": // Victoria
+              drawWin();
               break;
       }
 }
 
-function drawBackground(){
-      clear();
-  }
 
 function drawMenu(){
+      image(gameBackground,0,0,width,height);
+      
       push();
       textAlign(CENTER);
-      fill(255, 255, 255);
-      textSize(40);
-      text("Tales colores", width/2, height/2 - 100);
-      pop();
-      btnPlay.show();
       
+      // Sombra del título
+      fill(0, 150);
+      textSize(30);
+      text("¡Combina 3 o más para ganar!", width/2 - 60 + 3, height/2 + 110 + 3);
+      
+      // Título principal
+      fill(255, 200, 250); // Texto rosita claro
+      text("¡Combina 3 o más para ganar!", width/2-60, height/2 + 110);
+
+      pop();
+      
+      btnPlay.show();
   }
 
+function drawWin() {
+    background(20, 60, 40); // Fondo verde oscuro estético
+    
+    push();
+    textAlign(CENTER);
+    fill(255);
+    textSize(40);
+    text("¡Nivel " + currentLevel + " BACANO!", width/2, height/2 - 50);
+    
+    textSize(25);
+    fill(200, 255, 200);
+    text("Puntos obtenidos: " + points, width/2, height/2);
+    pop();
+    
+    btnNextLevel.show();
+}
+
 function drawPlaying(){
-  background(40); // Fondo del juego
-  drawQuadrille(board);  // Dibujo del tablero con los objetos Candy, cada uno se dibuja según su método display
-  updateAnimation(); // Siempre que haya un intercambio en proceso, se actualiza la animación
 
-  if (gravityAnimating) { // Dada la eliminación de dulces, se inicia la animación de gravedad
+  image(gameBackground,0,0,width,height);
+  boardX = (width - cols * Quadrille.cellLength) / 2;
+  boardY = 140;
+  //UI del Juego 
+  push();
+  fill(10, 10, 10, 210); // Fondo semitransparente para la barra superior
+  rect(0, 0, width, 100); // Barra superior
+  translate(0, 30); // Ajustamos el texto para que quede centrado verticalmente
+  fill(255);
+  textSize(18);
+  textAlign(LEFT, CENTER);
+  text("Nivel: " + currentLevel, 40, 30);
+  textAlign(CENTER, CENTER);
+  text("Meta: " + targetScore, width/2, 30);
+  textAlign(RIGHT, CENTER);
+  text("Puntos: " + points, width - 40, 30);
+  pop();
+  push();
 
-    applyGravity(); //llamando a la función
+fill(0, 0, 0  , 110);   // blanco con transparencia
+stroke(255, 120);
+strokeWeight(2);
+rect(boardX,boardY,cols * Quadrille.cellLength,rows * Quadrille.cellLength, 0); // Fondo del tablero con bordes redondeados
+pop();
 
-    if (gravityFinished()) { //Se verifica si la animiación de gravedad a finalizado
+  push();
+  translate(boardX, boardY); // Desplazamos el tablero hacia abajo para dejar espacio a la UI
+  drawQuadrille(board);
+  updateAnimation(); 
 
-      gravityAnimating = false; // Se indica que no se está aplicando la gravedad
-      waitingCascade = true; // Se inicia retraso antes de buscar nuevos patrones
-      cascadeStartTime = millis(); // Se guarda el tiempo de inicio del retraso para posterior medida
+  if (gravityAnimating) {
+    applyGravity(); 
+    if (gravityFinished()) { 
+      gravityAnimating = false; 
+      waitingCascade = true; 
+      cascadeStartTime = millis(); 
     }
   }
 
-  if (waitingCascade && millis() - cascadeStartTime > cascadeDelay) { //Si esta activo el retraso y el tiempo transcurrido es mayor al definido, se busca nuevos patrones formados por la caída de los dulces
-    waitingCascade = false; // Se desactiva el retraso
-    checkPattern(); // Se buscan nuevos patrones
+  if (waitingCascade && millis() - cascadeStartTime > cascadeDelay) { 
+    waitingCascade = false; 
+    checkPattern(); 
+  }
+  pop();
+  
+  // Chequeo de Victoria: Si no hay animaciones ocurriendo y se alcanzó la meta
+  if (!gravityAnimating && !swapAnimation && !waitingCascade) {
+      if (points >= targetScore) {
+          gameState = "win"; // ¡Cambiamos la máquina de estado!
+      }
   }
 }
 
 
-// Función para actualizar la animación de intercambio
 function updateAnimation() {
+  if (!swapAnimation) return; 
+  let elapsed = millis() - swapAnimation.startTime; 
+  if (elapsed >= animationDuration) { 
 
-  if (!swapAnimation) return; // Si no hay valores de animación, no se hace nada
-  let elapsed = millis() - swapAnimation.startTime; // Se calcula el tiempo transcurrido desde el inicio de la animación
-  if (elapsed >= animationDuration) { // Si el tiempo transcurrido supera la duración definida, se finaliza la animación realizando el intercambio real en memoria y se verifica si se formaron patrones
-
-    // Intercambio real en memoria
     board.fill(swapAnimation.r2, swapAnimation.c2, swapAnimation.candy1);
     board.fill(swapAnimation.r1, swapAnimation.c1, swapAnimation.candy2);
     selected = null;  
     swapAnimation = null;
-    // Verificación de patrones después del intercambio
     checkPattern();
   }
 }
 
-// Intercambio de dulces
 function mousePressed() {
   if (swapAnimation || gravityAnimating) return;
 
@@ -300,138 +379,161 @@ function mousePressed() {
      case "menu":
       btnPlay.handleClick();
       break;
+      
+     case "win": // Funcionalidad del click en estado victoria
+      btnNextLevel.handleClick();
+      break;
 
-     case "playing":
-      // No permitir clics durante la animación
-  if (gravityAnimating) return;
-  if (swapAnimation) return;
-  // Lectura de coordenadas de celda
-  const r = board.mouseRow;
-  const c = board.mouseCol;
-  //Si el click no está dentro de los limites del tablero, no se hace nada
-  if (!board.isValid(r, c)) return;
+ case "playing":
+      if (gravityAnimating) return;
+      if (swapAnimation) return;
+      
+      // Lectura de coordenadas ajustadas por la barra superior de UI
+      const r = floor((mouseY - boardY) / Quadrille.cellLength);
+      const c = floor((mouseX - boardX) / Quadrille.cellLength);
+      
+      if (!board.isValid(r, c) || mouseY < boardY) return;
 
-  // Primer clic
-  if (selected === null) {
-    selected = { r: r, c: c };
-    return; // Se finaliza la función para esperar el segundo clic
-  }
+      let clickedCandy = board.read(r, c); // Leemos qué dulce hay en esa casilla
 
-  // Segundo clic
-  // Una celda es adyacente si está a una distancia de 1 en fila o columna, pero no en ambas
-  let isAdjacent = (abs(selected.r - r) === 1 && selected.c === c) ||
-    (abs(selected.c - c) === 1 && selected.r === r);
+      // PRIMER CLICK
+      if (selected === null) {
+        // Si le das clic a un dulce congelado, el juego te ignora
+        if (clickedCandy instanceof SpecialCandy) return; 
+        
+        selected = { r: r, c: c };
+        return; 
+      }
 
-  if (isAdjacent) {
+      // Deseleccionar si tocas la misma pieza
+      if (selected.r === r && selected.c === c) {
+        selected = null; 
+        return;
+      }
+      
+      let isAdjacent = (abs(selected.r - r) === 1 && selected.c === c) ||
+        (abs(selected.c - c) === 1 && selected.r === r);
 
-    let candy1 = board.read(selected.r, selected.c); //Almcena dulce seleccionado primer click
-    let candy2 = board.read(r, c); //Almacena dulce seleccionado segundo click
+      // SEGUNDO CLICK
+      if (isAdjacent) {
+        let candy1 = board.read(selected.r, selected.c); 
+        let candy2 = board.read(r, c); 
 
-    //Diccionario que contedrá los elementos necesarios para la animación de intercambio
-    swapAnimation = {
-      candy1, // Elementos a animar
-      candy2,
-      r1: selected.r, // Posicion del primer dulce
-      c1: selected.c,
-      r2: r, // Posicion del segundo dulce
-      c2: c,
-      dx: (c - selected.c) * Quadrille.cellLength, // Distancia a recorrer en x
-      dy: (r - selected.r) * Quadrille.cellLength, // Distancia a recorrer en y
-      startTime: millis() // Tiempo de inicio de la animación
-    };
-  }
+        // Si intentas intercambiar tu pieza con un dulce congelado, cancelamos
+        if (candy2 instanceof SpecialCandy) {
+            selected = null;
+            return;
+        }
 
+        // Si ninguna es de hielo, iniciamos la animación normal
+        swapAnimation = {
+          candy1, candy2,
+          r1: selected.r, c1: selected.c,
+          r2: r, c2: c,
+          dx: (c - selected.c) * Quadrille.cellLength, 
+          dy: (r - selected.r) * Quadrille.cellLength, 
+          startTime: millis() 
+        };
+      }
+      break;
+    }
 }
-}
 
-//Detección de patrones
-function addUnique(toRemove, r, c) { // Función auxiliar para identificar posiciones ya agregadas al arreglo de elementos a remover
+function addUnique(toRemove, r, c) { 
   let exists = toRemove.some(
     pos => pos.r === r && pos.c === c
-  ); // Se verifica si la posición ya existe en el arreglo
+  ); 
 
   if (!exists) {
     toRemove.push({ r, c });
-    points += 10;
-  } //Si no existe, se agrega al arreglo
+    points += 10; // ¡Aquí se suman los puntos!
+  } 
 }
 
-//Función principal para detectar patrones
 function checkPattern() {
-  points = 0; // Reinicio de puntos para el conteo actual
-  let toRemove = []; //Arreglo para almacenar coordenadas de dulces a elimnar
+  let toRemove = []; 
 
-  // Buscar horizontal
   for (let r = 0; r < rows; r++) {
-    for (let c = 0; c <= cols - 3; c++) { //Se busca hasta cols - 3 dado que para los 2 ultimos elementos no existen 3 elementos consecutivos
+    for (let c = 0; c <= cols - 3; c++) { 
       let candy1 = board.read(r, c);
       let candy2 = board.read(r, c + 1);
-      let candy3 = board.read(r, c + 2); //Se leen los 3 dulces consecutivos
+      let candy3 = board.read(r, c + 2); 
+      let candy4 = (c <= cols - 4) ? board.read(r, c + 3) : null; 
 
-      if (candy1 && candy2 && candy3 && candy1.type === candy2.type && candy2.type === candy3.type) { //Si son iguales
+      if (candy1 && candy2 && candy3 && candy1.type === candy2.type && candy2.type === candy3.type) { 
         addUnique(toRemove, r, c);
         addUnique(toRemove, r, c + 1);
-        addUnique(toRemove, r, c + 2); // Se agregan al arreglo de elementos a eliminar
+        addUnique(toRemove, r, c + 2); 
+        
+        if (candy4 && candy3.type === candy4.type) { 
+            addUnique(toRemove, r, c + 3);
+            candy1.makeSpecial = true; 
+        }
       }
     }
   }
 
-  // Buscar vertical
-  for (let c = 0; c < cols; c++) { // Lógica similar a la búsqueda horizontal
+  for (let c = 0; c < cols; c++) { 
 
     for (let r = 0; r <= rows - 3; r++) {
       let candy1 = board.read(r, c);
       let candy2 = board.read(r + 1, c);
       let candy3 = board.read(r + 2, c);
+      let candy4 = (r <= rows - 4) ? board.read(r + 3, c) : null; 
 
       if (candy1 && candy2 && candy3 && candy1.type === candy2.type && candy2.type === candy3.type) {
         addUnique(toRemove, r, c);
         addUnique(toRemove, r + 1, c);
         addUnique(toRemove, r + 2, c);
+        
+        if (candy4 && candy3.type === candy4.type) { 
+            addUnique(toRemove, r + 3, c);
+            candy1.makeSpecial = true; 
+        }
       }
     }
   }
-  //Eliminar dulces
-  for (let pos of toRemove) { //Se recorren coordenadas almacenadas
-
-    board.fill( //Se eliminan los dulces llenando su posición con null
-      pos.r,
-      pos.c,
-      null
-    );
+  
+  for (let pos of toRemove) { 
+    let currentCandy = board.read(pos.r, pos.c);
+    
+    if (currentCandy && currentCandy.makeSpecial) {
+       board.fill(pos.r, pos.c, new SpecialCandy(currentCandy.type));
+    } else {
+       board.fill(pos.r, pos.c, null);
+    }
   }
-  // Solo iniciar gravedad si hubo eliminaciones
+  
   if (toRemove.length > 0) {
     gravityAnimating = true;
   }
 }
 
-function applyGravity() { // Función para aplicar gravedad a los dulces después de eliminaciones
-  for (let c = 0; c < cols; c++) { // Se recorre cada columna
-    for (let r = rows - 1; r >= 0; r--) { // Se recorre de abajo hacia arriba para aplicar gravedad correctamente
-      if (board.read(r, c) === null) { // Si la celda está vacía, 
-        for (let above = r - 1; above >= 0; above--) { //se busca el primer dulce por encima para caer en esa posición
-          let candy = board.read(above, c); // Se lee el dulce encontrado
-          if (candy !== null) { //si encuentra un dulce
+function applyGravity() { 
+  for (let c = 0; c < cols; c++) { 
+    for (let r = rows - 1; r >= 0; r--) { 
+      if (board.read(r, c) === null) {  
+        for (let above = r - 1; above >= 0; above--) { 
+          let candy = board.read(above, c); 
+          if (candy !== null) { 
 
-            let distance = r - above; // se calcula una distancia dada la posición del espacio vacio y la posición del siguiente dulce encontrado por arriba
-            board.fill(r, c, candy); // Se mueve el dulce a la posición vacía actual
-            board.fill(above, c, null); // Se deja vacía la posición original del dulce
-            candy.fallOffsetY = -distance * Quadrille.cellLength; // Se establece el desplazamiento vertical del dulce para la animación de caída 
-            break; //Se rompe el ciclo para seguir con la siguiente posición vacía, ya que ya se movió el dulce más cercano por encima y debe seguirse buscando mas dulces en la misma columna por encima
+            let distance = r - above; 
+            board.fill(r, c, candy); 
+            board.fill(above, c, null); 
+            candy.fallOffsetY = -distance * Quadrille.cellLength;  
+            break; 
           }
         }
       }
     }
   }
 
-  // Rellenar los huecos restantes con nuevos dulces que vienen desde arriba (aleatorios)
   for (let c = 0; c < cols; c++) {
     for (let r = 0; r < rows; r++) {
       if (board.read(r, c) === null) {
         let type = floor(random(candyColors.length));
         let newCandy = new Candy(type);
-        newCandy.fallOffsetY = - (r + 1) * Quadrille.cellLength; // empieza por encima del tablero y caerá hasta su fila
+        newCandy.fallOffsetY = - (r + 1) * Quadrille.cellLength; 
         board.fill(r, c, newCandy);
       }
     }
@@ -439,15 +541,13 @@ function applyGravity() { // Función para aplicar gravedad a los dulces despué
 }
 
 function gravityFinished() {
-
-  for (let r = 0; r < rows; r++) { //Se recorren todos los elementos del board y se revisa si alguno tiene desplazamiento vertical
+  for (let r = 0; r < rows; r++) { 
     for (let c = 0; c < cols; c++) {
       let candy = board.read(r, c);
       if (candy && abs(candy.fallOffsetY) > 0) {
-        return false; // Si hay algún dulce con desplazamiento vertical, gravedad no ha terminado de aplicarse
+        return false; 
       }
     }
   }
-
-  return true; // Si no hay desplazamiento vertical en ningún dulce, la gravedad terminó de aplicarse 
+  return true; 
 }
