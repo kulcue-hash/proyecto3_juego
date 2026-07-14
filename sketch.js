@@ -512,12 +512,13 @@ function mousePressed() {
           dy: (r - selected.r) * Quadrille.cellLength,
           startTime: millis()
         };
+        movesSinceLock += 1; //Cada vez que se realiza un intercambio se cuenta un movimieto
+        if (movesSinceLock >= lockInterval) { //alcanzada la cantidad de movimientos, se bloquea un dulce
+          lockRandomCandy();
+          movesSinceLock = 0; // Se reinicia el contador
+        }
       }
-      movesSinceLock += 1; //Cada vez que se realiza un intercambio se cuenta un movimieto
-      if (movesSinceLock >= lockInterval) { //alcanzada la cantidad de movimientos, se bloquea un dulce
-        lockRandomCandy();
-        movesSinceLock = 0; // Se reinicia el contador
-      }
+
   }
 }
 
