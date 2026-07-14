@@ -29,6 +29,7 @@ let boardX;
 let boardY;
 let menuBackground;
 let gameBackground;
+let lastPatternInfo = null;
 
 function preload() {
 
@@ -521,47 +522,104 @@ function mousePressed() {
 }
 
 //Detección de patrones
-function addUnique(toRemove, r, c) { // Función auxiliar para identificar posiciones ya agregadas al arreglo de elementos a remover
-  let exists = toRemove.some(
-    pos => pos.r === r && pos.c === c
-  ); // Se verifica si la posición ya existe en el arreglo
-
-  if (!exists) {
+function addRemovalPosition(toRemove, r, c) { //función que agrega coordenadas de la posición a remover del tablero y suma puntos
+  let exists = toRemove.some(pos => pos.r === r && pos.c === c); //Variable que verifica si existe la coordenada en el arreglo
+  if (!exists) { //Si no existe, se agrega la coordenada y se suman puntos
     toRemove.push({ r, c });
     points += 10;
-  } //Si no existe, se agrega al arreglo
+  }
 }
 
-function checkPattern() {
+function setPatternInfo(kind, count, positions) {//Función que guarda información del último patrón encontrado para identificar el tipo y las coordenadas
+  lastPatternInfo = { kind, count, positions }; //Con esta información, al eliminar, se puede identificar cuando crear un dulce especial
+}
+
+function checkPattern() { // Función para buscar patrones en el tablero
   let toRemove = []; //Arreglo para almacenar coordenadas de dulces a elimnar
+  lastPatternInfo = null; // Variable para almacenar información del último patrón encontrado
 
   // Buscar horizontal
-  for (let r = 0; r < rows; r++) {
-    for (let c = 0; c <= cols - 3; c++) { //Se busca hasta cols - 3 dado que para los 2 ultimos elementos no existen 3 elementos consecutivos
-      let candy1 = board.read(r, c);
-      let candy2 = board.read(r, c + 1);
-      let candy3 = board.read(r, c + 2); //Se leen los 3 dulces consecutivos
+  for (let r = 0; r < rows; r++) { // Se recorre cada fila
+    let runStart = 0; // Variable que indica el inicio de la secuencia de dulces del mismo tipo
+    let runType = null; // Variable que indica el tipo de dulce en la secuencia actual
 
-      if (candy1 && candy2 && candy3 && candy1.type === candy2.type && candy2.type === candy3.type) { //Si son iguales
-        addUnique(toRemove, r, c);
-        addUnique(toRemove, r, c + 1);
-        addUnique(toRemove, r, c + 2); // Se agregan al arreglo de elementos a eliminar
+    for (let c = 0; c < cols; c++) { // Se recorre cada columna
+      let candy = board.read(r, c); // se lee el dulce en la posición actual
+
+      if (runType === null) { // si no hay tipo de dulce definido, 
+        runType = candy.type; // se establece este y donde se empieza a revisar la secuencia
+        runStart = c;
+      } else if (candy.type !== runType) { // Si ya hay un tipo definido y el dulce actual no coincide
+        if (c - runStart >= 3) { // se revisa si la secuencia tiene al menos 3 dulces del mismo tipo
+          let positions = []; // Se define arreglo para almacenar las coordenadas de los dulces
+          for (let i = runStart; i < c; i++) { // Se agregan las coordenadas encontradas a la lista de arreglos a eliminar 
+            addRemovalPosition(toRemove, r, i);
+            positions.push({ r, c: i }); // Se agregan las coordenadas encontradas a la lista de posiciones del patrón
+          }
+          if (positions.length >= 4 && (!lastPatternInfo || positions.length > lastPatternInfo.count)) {
+            setPatternInfo("línea", positions.length, positions); // se guarda el patrón mas grande encontrado hasta el momento, para identificar si se debe crear un dulce especial
+          }
+        }
+        runType = candy.type; // Se actualiza el tipo de dulce cuando no se encuentra coincidencia
+        runStart = c; // y se actualiza la posición de inicio de la secuencia
       }
     }
   }
+
   // Buscar vertical
-  for (let c = 0; c < cols; c++) { // Lógica similar a la búsqueda horizontal
+  for (let c = 0; c < cols; c++) {
+    let runStart = 0;
+    let runType = null;
 
-    for (let r = 0; r <= rows - 3; r++) {
-      let candy1 = board.read(r, c);
-      let candy2 = board.read(r + 1, c);
-      let candy3 = board.read(r + 2, c);
-      let candy4 = (r <= rows - 4) ? board.read(r + 3, c) : null;
+    for (let r = 0; r < rows; r++) {
+      let candy = board.read(r, c);
 
-      if (candy1 && candy2 && candy3 && candy1.type === candy2.type && candy2.type === candy3.type) {
-        addUnique(toRemove, r, c);
-        addUnique(toRemove, r + 1, c);
-        addUnique(toRemove, r + 2, c);
+      if (runType === null) {
+        runType = candy.type;
+        runStart = r;
+      } else if (candy.type !== runType) {
+        if (r - runStart >= 3) {
+          let positions = [];
+          for (let i = runStart; i < r; i++) {
+            addRemovalPosition(toRemove, i, c);
+            positions.push({ r: i, c });
+          }
+          if (positions.length >= 4 && (!lastPatternInfo || positions.length > lastPatternInfo.count)) {
+            setPatternInfo("línea", positions.length, positions);
+          }
+        }
+        runType = candy.type;
+        runStart = r;
+      }
+    }
+  }
+
+  // Buscar patrones tipo L o T de 5 dulces
+  for (let r = 0; r < rows - 1; r++) {
+    for (let c = 0; c < cols - 2; c++) {
+      let firstCandy = board.read(r, c);
+      if (!firstCandy) continue;
+
+      let positions = [];
+      let targetType = firstCandy.type;
+
+      for (let rr = r; rr < r + 2; rr++) {
+        for (let cc = c; cc < c + 3; cc++) {
+          let candy = board.read(rr, cc);
+          if (candy && candy.type === targetType) {
+            positions.push({ r: rr, c: cc });
+          }
+        }
+      }
+
+      if (positions.length === 5) {
+        let isStraight = positions.every(pos => pos.r === positions[0].r) || positions.every(pos => pos.c === positions[0].c);
+        if (!isStraight) {
+          for (let pos of positions) {
+            addRemovalPosition(toRemove, pos.r, pos.c);
+          }
+          setPatternInfo("L/T", 5, positions);
+        }
       }
     }
   }
