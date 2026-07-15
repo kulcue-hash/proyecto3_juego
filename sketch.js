@@ -29,13 +29,25 @@ let boardX;
 let boardY;
 let menuBackground;
 let gameBackground;
+let SpecialCandyImages = [];
+let candyImages = []; // Arreglo para almacenar imágenes de dulces
 let lastPatternInfo = null;
 
 function preload() {
 
   menuBackground = loadImage("menu.jpg");
   gameBackground = loadImage("canva.jpeg");
-
+  candyImages[0] = loadImage("Candyred.png");
+  candyImages[1] = loadImage("candyGreen.png");
+  candyImages[2] = loadImage("candyBlue.png");
+  candyImages[3] = loadImage("candyYellow.png");
+  candyImages[4] = loadImage("candyPurple.png");
+  SpecialCandyImages[0] = [loadImage("/SpecialCandies/CRh.png"), loadImage("/SpecialCandies/CRv.png")];
+  SpecialCandyImages[1] = [loadImage("/SpecialCandies/CGh.png"), loadImage("/SpecialCandies/CGv.png")];
+  SpecialCandyImages[2] = [loadImage("/SpecialCandies/CBh.png"), loadImage("/SpecialCandies/CBv.png")];
+  SpecialCandyImages[3] = [loadImage("/SpecialCandies/CYh.png"), loadImage("/SpecialCandies/CYv.png")];
+  SpecialCandyImages[4] = [loadImage("/SpecialCandies/CPh.png"), loadImage("/SpecialCandies/CPv.png")];
+  SpecialCandyImages[5] = [loadImage("/SpecialCandies/ColorBomb.png")];
 }
 class Button {
   constructor(x, y, w, h, label, onClick) {
@@ -114,10 +126,9 @@ class Candy {
     this.locked = false; // Si el dulce está bloqueado y no se puede mover
   }
 
-  display({ row, col }) {
-    let cellLength = Quadrille.cellLength;
-    let offsetX = 0; // Se aplica el desplazamiento horizontal para la animación de intercambio
-    let offsetY = this.fallOffsetY; // Se aplica el desplazamiento vertical para la animación de caída
+  getDisplayOffset({ row, col }) { // Método que calcula el desplazamiento visual de un dulce 
+    let offsetX = 0; // variable para mover horizontalmente
+    let offsetY = this.fallOffsetY; // variable para mover verticalmente, ya que es afectado por la gravedad, podría no ser cero
 
     // Animación de caída
     if (abs(this.fallOffsetY) > 0.1) { //Siempre que el desplazamiento vertical sea mayor a 0.1, se aplica la animación de caída
@@ -151,76 +162,97 @@ class Candy {
       }
     }
 
-    push();
-    // Establecimiento de posición relativa a los desplazamientos
-    translate(offsetX, offsetY);
+    return { offsetX, offsetY }; // retorna los desplazamientos calculados para la posición del dulce
+  }
 
-    // Se dibuja el dulce con su color correspondiente
-    fill(candyColors[this.type]);
-    if (selected && selected.r === row && selected.c === col) {
-      stroke(0); // Borde para selección señalar la selección del dulce cuendo se da el primer click
+  drawCandyBody({ row, col }) { // Métedo definir el cuerpo del dulce y si está seleccionado
+    let cellLength = Quadrille.cellLength; // Se lee el tamaño de celda
+
+    if (selected && selected.r === row && selected.c === col) { // Si el dulce está seleccionado, se dibuja un contorno para dar visualización de selección
+      stroke(255);
       strokeWeight(4);
-    } else {
-      noStroke();
+      noFill();
+      circle(
+        cellLength / 2,
+        cellLength / 2,
+        cellLength * 0.9
+      );
     }
-    circle(cellLength / 2, cellLength / 2, cellLength * 0.8); //Se dibuja un círculo dado el centro relativo 
+    imageMode(CENTER);// Se establece el modo de dibujo de imágenes al centro para que la imagen del dulce se dibuje centrada en la celda
+    image(
+      candyImages[this.type], // Se asigna la imagen del dulce según su tipo
+      cellLength / 2,
+      cellLength / 2,
+      cellLength * 0.85,
+      cellLength * 0.85
+    );
 
-    if (this.locked) { //Indicador visual de bloqueo
+
+    if (this.locked) { // Si el dulce está bloqueado, se indica visualmente mediante un cuadrado blanco
       noStroke();
       fill(255);
       rectMode(CENTER);
       rect(cellLength / 2, cellLength / 2, cellLength * 0.3, cellLength * 0.3);
     }
+  }
+
+  display({ row, col }) { //Método para dibujar el dulce en la posición de la cuadrícula
+    let { offsetX, offsetY } = this.getDisplayOffset({ row, col });
+
+    push();
+    translate(offsetX, offsetY);
+    this.drawCandyBody({ row, col });
     pop();
   }
 }
 
 // Implementación de Herencias para dulces especiales
-class specialCandy extends Candy {
-  constructor(type) {
+class specialCandy extends Candy { // Clase especial de dulce
+  constructor(type, kind = null) {
     super(type);
+    this.kind = kind; // tiene una propiedad adicional que indica si es horizontal o vertical dependiendo de donde resultó
+  }
+
+  getSpecialImage() { // Método para obtener la imagen del dulce especial según tipo y orientación
+    if (this.kind === "horizontal") {
+      return SpecialCandyImages[this.type][0];
+    }
+
+    if (this.kind === "vertical") {
+      return SpecialCandyImages[this.type][1];
+    }
+
+    return null;
   }
 
   display({ row, col }) {
+    let { offsetX, offsetY } = this.getDisplayOffset({ row, col });
     let cellLength = Quadrille.cellLength;
-    let offsetX = 0;
-    let offsetY = this.fallOffsetY;
-
-    if (abs(this.fallOffsetY) > 0.5) {
-      this.fallOffsetY = lerp(this.fallOffsetY, 0, 0.1);
-    } else {
-      this.fallOffsetY = 0;
-    }
-
-    if (swapAnimation) {
-      let t = constrain((millis() - swapAnimation.startTime) / animationDuration, 0, 1);
-      if (this === swapAnimation.candy1) {
-        offsetX = lerp(0, swapAnimation.dx, t);
-        offsetY += lerp(0, swapAnimation.dy, t);
-      }
-      if (this === swapAnimation.candy2) {
-        offsetX = lerp(0, -swapAnimation.dx, t);
-        offsetY += lerp(0, -swapAnimation.dy, t);
-      }
-    }
+    let specialImage = this.getSpecialImage();
 
     push();
     translate(offsetX, offsetY);
-    fill(candyColors[this.type]);
 
     if (selected && selected.r === row && selected.c === col) {
+      noFill();
       stroke(255);
       strokeWeight(4);
-    } else {
-      noStroke();
+      circle(cellLength / 2, cellLength / 2, cellLength * 0.9);
     }
-    circle(cellLength / 2, cellLength / 2, cellLength * 0.8);
 
-    //EFECTO VISUAL DEL DULCE ESPECIAL
-    fill(255, 200);
-    noStroke();
-    rectMode(CENTER);
-    rect(cellLength / 2, cellLength / 2, cellLength * 0.3, cellLength * 0.3);
+    if (specialImage) {
+      imageMode(CENTER);
+      image(
+        specialImage,
+        cellLength / 2,
+        cellLength / 2,
+        cellLength * 0.85,
+        cellLength * 0.85
+      );
+    } else {
+      this.drawCandyBody({ row, col });
+    }
+
     pop();
   }
 }
@@ -531,8 +563,29 @@ function addRemovalPosition(toRemove, r, c) { //función que agrega coordenadas 
   }
 }
 
-function setPatternInfo(kind, count, positions) {//Función que guarda información del último patrón encontrado para identificar el tipo y las coordenadas
-  lastPatternInfo = { kind, count, positions }; //Con esta información, al eliminar, se puede identificar cuando crear un dulce especial
+function expandSpecialCandyRemoval(toRemove) { // Expande la eliminación de un dulce especial a toda la fila o columna correspondiente
+  let expanded = [...toRemove];
+
+  for (let pos of toRemove) {
+    let candy = board.read(pos.r, pos.c);
+    if (!(candy instanceof specialCandy)) continue;
+
+    if (candy.kind === "horizontal") {
+      for (let c = 0; c < cols; c++) {
+        addRemovalPosition(expanded, pos.r, c);
+      }
+    } else if (candy.kind === "vertical") {
+      for (let r = 0; r < rows; r++) {
+        addRemovalPosition(expanded, r, pos.c);
+      }
+    }
+  }
+
+  return expanded;
+}
+
+function setPatternInfo(kind, positions, type = null) {//Función que guarda información del último patrón encontrado para identificar el tipo y las coordenadas
+  lastPatternInfo = { kind, positions, type }; //Con esta información, al eliminar, se puede identificar cuando crear un dulce especial
 }
 
 function checkPattern() { // Función para buscar patrones en el tablero
@@ -560,7 +613,7 @@ function checkPattern() { // Función para buscar patrones en el tablero
             positions.push({ r, c: i }); // Se agregan las coordenadas encontradas a la lista de posiciones del patrón
           }
           if (positions.length >= 4 && (!lastPatternInfo || positions.length > lastPatternInfo.count)) {
-            setPatternInfo("línea", positions.length, positions); // se guarda el patrón mas grande encontrado hasta el momento, para identificar si se debe crear un dulce especial
+            setPatternInfo("horizontal", positions, runType); // se guarda el patrón mas grande encontrado hasta el momento, para identificar si se debe crear un dulce especial
           }
         }
         if (c < cols) {
@@ -592,7 +645,7 @@ function checkPattern() { // Función para buscar patrones en el tablero
             positions.push({ r: i, c });
           }
           if (positions.length >= 4 && (!lastPatternInfo || positions.length > lastPatternInfo.count)) {
-            setPatternInfo("línea", positions.length, positions);
+            setPatternInfo("vertical", positions, runType);
           }
         }
         if (r < rows) {
@@ -603,38 +656,12 @@ function checkPattern() { // Función para buscar patrones en el tablero
     }
   }
 
-  // Buscar patrones tipo L o T de 5 dulces
-  for (let r = 0; r < rows - 1; r++) {
-    for (let c = 0; c < cols - 2; c++) {
-      let firstCandy = board.read(r, c);
-      if (!firstCandy) continue;
 
-      let positions = [];
-      let targetType = firstCandy.type;
 
-      for (let rr = r; rr < r + 2; rr++) {
-        for (let cc = c; cc < c + 3; cc++) {
-          let candy = board.read(rr, cc);
-          if (candy && candy.type === targetType) {
-            positions.push({ r: rr, c: cc });
-          }
-        }
-      }
-
-      if (positions.length === 5) {
-        let isStraight = positions.every(pos => pos.r === positions[0].r) || positions.every(pos => pos.c === positions[0].c);
-        if (!isStraight) {
-          for (let pos of positions) {
-            addRemovalPosition(toRemove, pos.r, pos.c);
-          }
-          setPatternInfo("L/T", 5, positions);
-        }
-      }
-    }
-  }
+  const expandedToRemove = expandSpecialCandyRemoval(toRemove);
 
   //Eliminar dulces
-  for (let pos of toRemove) { //Se recorren coordenadas almacenadas
+  for (let pos of expandedToRemove) { //Se recorren coordenadas almacenadas
 
     board.fill( //Se eliminan los dulces llenando su posición con null
       pos.r,
@@ -642,6 +669,14 @@ function checkPattern() { // Función para buscar patrones en el tablero
       null
     );
   }
+  if (lastPatternInfo) {
+    let { kind, positions, type } = lastPatternInfo; //Se desestructura la información del último patrón encontrado
+    let lastPos = positions[positions.length - 1]; //Se obtiene la última posición del patrón
+    let special = new specialCandy(type, kind); // Se crea una instancia de la clase specialCandy con el tipo y kind dados
+    board.fill(lastPos.r, lastPos.c, special);  //Se crea un dulce especial en la posición del último patrón encontrado
+  } //Si se encontró un patrón, se crea un dulce especial en la posición del último patrón encontrado
+
+
   // Solo iniciar gravedad si hubo eliminaciones
   if (toRemove.length > 0) {
     gravityAnimating = true;
@@ -650,7 +685,6 @@ function checkPattern() { // Función para buscar patrones en el tablero
   return false; //Si no se encontró ninguna coincidencia, la función retorna false
   // Este booleano es empleado para si se revierte o no un intercambio 
 }
-
 function applyGravity() { // Función para aplicar gravedad a los dulces después de eliminaciones
   for (let c = 0; c < cols; c++) { // Se recorre cada columna
     for (let r = rows - 1; r >= 0; r--) { // Se recorre de abajo hacia arriba para aplicar gravedad correctamente
@@ -693,4 +727,9 @@ function gravityFinished() {
     }
   }
   return true; // Si no hay desplazamiento vertical en ningún dulce, la gravedad terminó de aplicarse 
+}
+
+function createSpecialCandy(r, c, type) { // Función para crear un dulce especial en la posición dada
+  let special = new specialCandy(type); // Se crea una instancia de la clase specialCandy con el tipo dado
+  board.fill(r, c, special); // Se coloca el dulce especial en la posición del tablero
 }
