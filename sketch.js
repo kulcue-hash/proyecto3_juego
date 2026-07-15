@@ -29,13 +29,21 @@ let boardX;
 let boardY;
 let menuBackground;
 let gameBackground;
+let bombImage; // Imagen de la bomba de color
+let candyImages = []; // Arreglo para almacenar imágenes de dulces
 let lastPatternInfo = null;
 
 function preload() {
 
   menuBackground = loadImage("menu.jpg");
   gameBackground = loadImage("canva.jpeg");
-
+  bombImage = loadImage("SpecialCandies/ColorBomb.png");
+  candyImages[0] = loadImage("Candyred.png");
+  candyImages[1] = loadImage("candyGreen.png");
+  candyImages[2] = loadImage("candyBlue.png");
+  candyImages[3] = loadImage("candyYellow.png");
+  candyImages[4] = loadImage("candyPurple.png");
+ 
 }
 class Button {
   constructor(x, y, w, h, label, onClick) {
@@ -157,13 +165,25 @@ class Candy {
 
     // Se dibuja el dulce con su color correspondiente
     fill(candyColors[this.type]);
-    if (selected && selected.r === row && selected.c === col) {
-      stroke(0); // Borde para selección señalar la selección del dulce cuendo se da el primer click
-      strokeWeight(4);
-    } else {
-      noStroke();
-    }
-    circle(cellLength / 2, cellLength / 2, cellLength * 0.8); //Se dibuja un círculo dado el centro relativo 
+    // Si el dulce está seleccionado, se dibuja un contorno blanco alrededor de él
+    if (selected && selected.r === row && selected.c === col){
+    stroke(255);
+    strokeWeight(4);
+    noFill();
+    circle(
+        cellLength/2,
+        cellLength/2,
+        cellLength*0.9
+    );
+}
+imageMode(CENTER);// Se establece el modo de dibujo de imágenes al centro para que la imagen del dulce se dibuje centrada en la celda
+image(
+    candyImages[this.type],
+    cellLength/2,
+    cellLength/2,
+    cellLength*0.85,
+    cellLength*0.85
+);
 
     if (this.locked) { //Indicador visual de bloqueo
       noStroke();
@@ -173,6 +193,9 @@ class Candy {
     }
     pop();
   }
+  activate(board){
+        // Un dulce normal no hace nada
+    }
 }
 
 // Implementación de Herencias para dulces especiales
@@ -207,14 +230,25 @@ class specialCandy extends Candy {
     push();
     translate(offsetX, offsetY);
     fill(candyColors[this.type]);
-
-    if (selected && selected.r === row && selected.c === col) {
-      stroke(255);
-      strokeWeight(4);
-    } else {
-      noStroke();
-    }
-    circle(cellLength / 2, cellLength / 2, cellLength * 0.8);
+// Si el dulce está seleccionado, se dibuja un contorno blanco alrededor de él
+    if (selected && selected.r === row && selected.c === col){
+    stroke(255);
+    strokeWeight(4);
+    noFill();
+    circle(
+        cellLength/2,
+        cellLength/2,
+        cellLength*0.9
+    );
+}
+imageMode(CENTER);// Se establece el modo de dibujo de imágenes al centro para que la imagen del dulce se dibuje centrada en la celda
+image(
+    candyImages[this.type],
+    cellLength/2,
+    cellLength/2,
+    cellLength*0.85,
+    cellLength*0.85
+);
 
     //EFECTO VISUAL DEL DULCE ESPECIAL
     fill(255, 200);
@@ -223,6 +257,69 @@ class specialCandy extends Candy {
     rect(cellLength / 2, cellLength / 2, cellLength * 0.3, cellLength * 0.3);
     pop();
   }
+}
+
+// CLASE BOMBA DE COLOR (HEREDA DE CANDY)
+class ColorBomb extends Candy{
+  constructor(){
+    // Llamada al constructor de la clase padre con un tipo especial (-1) para indicar que es una bomba de color
+    super(-1);
+  }
+  display({row,col}){
+    let cellLength = Quadrille.cellLength;
+    let offsetX = 0;
+    let offsetY = this.fallOffsetY;
+    // Animación de caída
+    if(abs(this.fallOffsetY)>0.5){
+      this.fallOffsetY = lerp(this.fallOffsetY,0,0.1);
+    }
+    else{
+      this.fallOffsetY = 0;
+    }
+    // Animación de intercambio
+    if(swapAnimation){
+      let t = constrain(
+        (millis()-swapAnimation.startTime)/animationDuration,
+        0,1);
+      if(this===swapAnimation.candy1){
+        offsetX = lerp(0,swapAnimation.dx,t);
+        offsetY += lerp(0,swapAnimation.dy,t);
+      }
+      if(this===swapAnimation.candy2){
+        offsetX = lerp(0,-swapAnimation.dx,t);
+        offsetY += lerp(0,-swapAnimation.dy,t);
+      }
+    }
+    push();
+    translate(offsetX,offsetY);
+    imageMode(CENTER);
+    image(
+      bombImage,
+      cellLength/2,
+      cellLength/2,
+      cellLength*0.90,
+      cellLength*0.90
+  );
+    pop();
+  }
+  explode(){
+    let destroyed = 0;
+    while(destroyed < 20){
+        let rr = floor(random(rows));
+        let cc = floor(random(cols));
+
+        let candy = board.read(rr,cc);
+        if(
+            candy != null &&
+            !(candy instanceof ColorBomb)
+        ){
+            board.fill(rr,cc,null);
+            destroyed++;
+            points += 10;
+        }
+    }
+    gravityAnimating = true;
+}
 }
 
 // Función para obtener un tipo de dulce válido que no forme patrones
@@ -334,7 +431,7 @@ function drawWin() {
 
 function drawPlaying() {
 
-  image(gameBackground, 0, 0, width, height);
+  image(menuBackground, 0, 0, width, height);
   boardX = (width - cols * Quadrille.cellLength) / 2;
   boardY = 140;
   //UI del Juego 
@@ -503,6 +600,20 @@ function mousePressed() {
         let candy1 = board.read(selected.r, selected.c); //Almcena dulce seleccionado primer click
         let candy2 = board.read(r, c); //Almacena dulce seleccionado segundo click
 
+        // Activar bomba de color
+        if(candy1 instanceof ColorBomb){
+            board.fill(selected.r, selected.c, null);
+            candy1.explode();
+            selected = null;
+            return;
+        }
+        if(candy2 instanceof ColorBomb){
+            board.fill(r, c, null);
+            candy2.explode();
+            selected = null;
+            return;
+        }
+
         //Diccionario que contedrá los elementos necesarios para la animación de intercambio
         swapAnimation = {
           candy1, candy2,
@@ -512,12 +623,13 @@ function mousePressed() {
           dy: (r - selected.r) * Quadrille.cellLength,
           startTime: millis()
         };
+        movesSinceLock += 1; //Cada vez que se realiza un intercambio se cuenta un movimieto
+        if (movesSinceLock >= lockInterval) { //alcanzada la cantidad de movimientos, se bloquea un dulce
+          lockRandomCandy();
+          movesSinceLock = 0; // Se reinicia el contador
+        }
       }
-      movesSinceLock += 1; //Cada vez que se realiza un intercambio se cuenta un movimieto
-      if (movesSinceLock >= lockInterval) { //alcanzada la cantidad de movimientos, se bloquea un dulce
-        lockRandomCandy();
-        movesSinceLock = 0; // Se reinicia el contador
-      }
+
   }
 }
 
@@ -534,6 +646,10 @@ function setPatternInfo(kind, count, positions) {//Función que guarda informaci
   lastPatternInfo = { kind, count, positions }; //Con esta información, al eliminar, se puede identificar cuando crear un dulce especial
 }
 
+function setPatternInfo(kind, count, positions) {//Función que guarda información del último patrón encontrado para identificar el tipo y las coordenadas
+  lastPatternInfo = { kind, count, positions }; //Con esta información, al eliminar, se puede identificar cuando crear un dulce especial
+}
+
 function checkPattern() { // Función para buscar patrones en el tablero
   let toRemove = []; //Arreglo para almacenar coordenadas de dulces a elimnar
   lastPatternInfo = null; // Variable para almacenar información del último patrón encontrado
@@ -543,13 +659,15 @@ function checkPattern() { // Función para buscar patrones en el tablero
     let runStart = 0; // Variable que indica el inicio de la secuencia de dulces del mismo tipo
     let runType = null; // Variable que indica el tipo de dulce en la secuencia actual
 
-    for (let c = 0; c < cols; c++) { // Se recorre cada columna
-      let candy = board.read(r, c); // se lee el dulce en la posición actual
+    for (let c = 0; c <= cols; c++) { // Se recorre cada columna y un paso extra para cerrar la secuencia al final
+      let candy = c < cols ? board.read(r, c) : null; // se lee el dulce en la posición actual siempre que no se haya llegado al final de la fila, si se llega al final, se asigna null para cerrar la secuencia
 
       if (runType === null) { // si no hay tipo de dulce definido, 
-        runType = candy.type; // se establece este y donde se empieza a revisar la secuencia
-        runStart = c;
-      } else if (candy.type !== runType) { // Si ya hay un tipo definido y el dulce actual no coincide
+        if (c < cols) {
+          runType = candy.type; // se establece este y donde se empieza a revisar la secuencia
+          runStart = c;
+        }
+      } else if (c === cols || candy.type !== runType) { // Si ya hay un tipo definido y el dulce actual no coincide o si se llega al final de la fila
         if (c - runStart >= 3) { // se revisa si la secuencia tiene al menos 3 dulces del mismo tipo
           let positions = []; // Se define arreglo para almacenar las coordenadas de los dulces
           for (let i = runStart; i < c; i++) { // Se agregan las coordenadas encontradas a la lista de arreglos a eliminar 
@@ -560,8 +678,10 @@ function checkPattern() { // Función para buscar patrones en el tablero
             setPatternInfo("línea", positions.length, positions); // se guarda el patrón mas grande encontrado hasta el momento, para identificar si se debe crear un dulce especial
           }
         }
-        runType = candy.type; // Se actualiza el tipo de dulce cuando no se encuentra coincidencia
-        runStart = c; // y se actualiza la posición de inicio de la secuencia
+        if (c < cols) {
+          runType = candy.type; // Se actualiza el tipo de dulce cuando no se encuentra coincidencia
+          runStart = c; // y se actualiza la posición de inicio de la secuencia
+        }
       }
     }
   }
@@ -571,13 +691,15 @@ function checkPattern() { // Función para buscar patrones en el tablero
     let runStart = 0;
     let runType = null;
 
-    for (let r = 0; r < rows; r++) {
-      let candy = board.read(r, c);
+    for (let r = 0; r <= rows; r++) {
+      let candy = r < rows ? board.read(r, c) : null;
 
       if (runType === null) {
-        runType = candy.type;
-        runStart = r;
-      } else if (candy.type !== runType) {
+        if (r < rows) {
+          runType = candy.type;
+          runStart = r;
+        }
+      } else if (r === rows || candy.type !== runType) {
         if (r - runStart >= 3) {
           let positions = [];
           for (let i = runStart; i < r; i++) {
@@ -588,8 +710,10 @@ function checkPattern() { // Función para buscar patrones en el tablero
             setPatternInfo("línea", positions.length, positions);
           }
         }
-        runType = candy.type;
-        runStart = r;
+        if (r < rows) {
+          runType = candy.type;
+          runStart = r;
+        }
       }
     }
   }
@@ -623,16 +747,40 @@ function checkPattern() { // Función para buscar patrones en el tablero
       }
     }
   }
+// Crear bomba de color si se encontró una línea de 5
+let bombPosition = null;
 
+if (
+    lastPatternInfo &&
+    lastPatternInfo.kind === "línea" &&
+    lastPatternInfo.count === 5
+){
+
+    bombPosition = lastPatternInfo.positions[2];// Se elige la posición central de la línea para colocar la bomba
+}
   //Eliminar dulces
-  for (let pos of toRemove) { //Se recorren coordenadas almacenadas
-
-    board.fill( //Se eliminan los dulces llenando su posición con null
-      pos.r,
-      pos.c,
-      null
-    );
-  }
+  for (let pos of toRemove) {
+    // Si esta posición será la bomba
+    if (
+        bombPosition &&
+        pos.r === bombPosition.r &&
+        pos.c === bombPosition.c
+    ){
+        board.fill(
+            pos.r,
+            pos.c,
+            new ColorBomb()
+        )
+    }
+    // Dulce normal
+    else{
+        board.fill(
+            pos.r,
+            pos.c,
+            null
+        );
+    }
+}
   // Solo iniciar gravedad si hubo eliminaciones
   if (toRemove.length > 0) {
     gravityAnimating = true;
