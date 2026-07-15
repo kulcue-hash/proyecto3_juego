@@ -30,8 +30,8 @@ let gameBackground;
 
 function preload() {
 
-  menuBackground = loadImage("menu.jpg");
-  gameBackground = loadImage("canva.jpeg");
+  gameBackground = loadImage("menu.jpg");
+  menuBackground = loadImage("canva.jpeg");
 
 }
 class Button {
@@ -266,7 +266,7 @@ function draw() {
 
 
 function drawMenu() {
-  image(gameBackground, 0, 0, width, height);
+  image(menuBackground, 0, 0, width, height);
 
   push();
   textAlign(CENTER);
