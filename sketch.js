@@ -29,6 +29,7 @@ let boardX;
 let boardY;
 let menuBackground;
 let gameBackground;
+let bombImage; // Imagen de la bomba de color
 let candyImages = []; // Arreglo para almacenar imágenes de dulces
 let lastPatternInfo = null;
 
@@ -36,6 +37,7 @@ function preload() {
 
   menuBackground = loadImage("menu.jpg");
   gameBackground = loadImage("canva.jpeg");
+  bombImage = loadImage("SpecialCandies/ColorBomb.png");
   candyImages[0] = loadImage("Candyred.png");
   candyImages[1] = loadImage("candyGreen.png");
   candyImages[2] = loadImage("candyBlue.png");
@@ -191,6 +193,9 @@ image(
     }
     pop();
   }
+  activate(board){
+        // Un dulce normal no hace nada
+    }
 }
 
 // Implementación de Herencias para dulces especiales
@@ -252,6 +257,69 @@ image(
     rect(cellLength / 2, cellLength / 2, cellLength * 0.3, cellLength * 0.3);
     pop();
   }
+}
+
+// CLASE BOMBA DE COLOR (HEREDA DE CANDY)
+class ColorBomb extends Candy{
+  constructor(){
+    // Llamada al constructor de la clase padre con un tipo especial (-1) para indicar que es una bomba de color
+    super(-1);
+  }
+  display({row,col}){
+    let cellLength = Quadrille.cellLength;
+    let offsetX = 0;
+    let offsetY = this.fallOffsetY;
+    // Animación de caída
+    if(abs(this.fallOffsetY)>0.5){
+      this.fallOffsetY = lerp(this.fallOffsetY,0,0.1);
+    }
+    else{
+      this.fallOffsetY = 0;
+    }
+    // Animación de intercambio
+    if(swapAnimation){
+      let t = constrain(
+        (millis()-swapAnimation.startTime)/animationDuration,
+        0,1);
+      if(this===swapAnimation.candy1){
+        offsetX = lerp(0,swapAnimation.dx,t);
+        offsetY += lerp(0,swapAnimation.dy,t);
+      }
+      if(this===swapAnimation.candy2){
+        offsetX = lerp(0,-swapAnimation.dx,t);
+        offsetY += lerp(0,-swapAnimation.dy,t);
+      }
+    }
+    push();
+    translate(offsetX,offsetY);
+    imageMode(CENTER);
+    image(
+      bombImage,
+      cellLength/2,
+      cellLength/2,
+      cellLength*0.90,
+      cellLength*0.90
+  );
+    pop();
+  }
+  explode(){
+    let destroyed = 0;
+    while(destroyed < 20){
+        let rr = floor(random(rows));
+        let cc = floor(random(cols));
+
+        let candy = board.read(rr,cc);
+        if(
+            candy != null &&
+            !(candy instanceof ColorBomb)
+        ){
+            board.fill(rr,cc,null);
+            destroyed++;
+            points += 10;
+        }
+    }
+    gravityAnimating = true;
+}
 }
 
 // Función para obtener un tipo de dulce válido que no forme patrones
@@ -532,6 +600,20 @@ function mousePressed() {
         let candy1 = board.read(selected.r, selected.c); //Almcena dulce seleccionado primer click
         let candy2 = board.read(r, c); //Almacena dulce seleccionado segundo click
 
+        // Activar bomba de color
+        if(candy1 instanceof ColorBomb){
+            board.fill(selected.r, selected.c, null);
+            candy1.explode();
+            selected = null;
+            return;
+        }
+        if(candy2 instanceof ColorBomb){
+            board.fill(r, c, null);
+            candy2.explode();
+            selected = null;
+            return;
+        }
+
         //Diccionario que contedrá los elementos necesarios para la animación de intercambio
         swapAnimation = {
           candy1, candy2,
@@ -661,16 +743,40 @@ function checkPattern() { // Función para buscar patrones en el tablero
       }
     }
   }
+// Crear bomba de color si se encontró una línea de 5
+let bombPosition = null;
 
+if (
+    lastPatternInfo &&
+    lastPatternInfo.kind === "línea" &&
+    lastPatternInfo.count === 5
+){
+
+    bombPosition = lastPatternInfo.positions[2];// Se elige la posición central de la línea para colocar la bomba
+}
   //Eliminar dulces
-  for (let pos of toRemove) { //Se recorren coordenadas almacenadas
-
-    board.fill( //Se eliminan los dulces llenando su posición con null
-      pos.r,
-      pos.c,
-      null
-    );
-  }
+  for (let pos of toRemove) {
+    // Si esta posición será la bomba
+    if (
+        bombPosition &&
+        pos.r === bombPosition.r &&
+        pos.c === bombPosition.c
+    ){
+        board.fill(
+            pos.r,
+            pos.c,
+            new ColorBomb()
+        )
+    }
+    // Dulce normal
+    else{
+        board.fill(
+            pos.r,
+            pos.c,
+            null
+        );
+    }
+}
   // Solo iniciar gravedad si hubo eliminaciones
   if (toRemove.length > 0) {
     gravityAnimating = true;
