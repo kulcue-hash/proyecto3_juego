@@ -544,13 +544,15 @@ function checkPattern() { // Función para buscar patrones en el tablero
     let runStart = 0; // Variable que indica el inicio de la secuencia de dulces del mismo tipo
     let runType = null; // Variable que indica el tipo de dulce en la secuencia actual
 
-    for (let c = 0; c < cols; c++) { // Se recorre cada columna
-      let candy = board.read(r, c); // se lee el dulce en la posición actual
+    for (let c = 0; c <= cols; c++) { // Se recorre cada columna y un paso extra para cerrar la secuencia al final
+      let candy = c < cols ? board.read(r, c) : null; // se lee el dulce en la posición actual siempre que no se haya llegado al final de la fila, si se llega al final, se asigna null para cerrar la secuencia
 
       if (runType === null) { // si no hay tipo de dulce definido, 
-        runType = candy.type; // se establece este y donde se empieza a revisar la secuencia
-        runStart = c;
-      } else if (candy.type !== runType) { // Si ya hay un tipo definido y el dulce actual no coincide
+        if (c < cols) {
+          runType = candy.type; // se establece este y donde se empieza a revisar la secuencia
+          runStart = c;
+        }
+      } else if (c === cols || candy.type !== runType) { // Si ya hay un tipo definido y el dulce actual no coincide o si se llega al final de la fila
         if (c - runStart >= 3) { // se revisa si la secuencia tiene al menos 3 dulces del mismo tipo
           let positions = []; // Se define arreglo para almacenar las coordenadas de los dulces
           for (let i = runStart; i < c; i++) { // Se agregan las coordenadas encontradas a la lista de arreglos a eliminar 
@@ -561,8 +563,10 @@ function checkPattern() { // Función para buscar patrones en el tablero
             setPatternInfo("línea", positions.length, positions); // se guarda el patrón mas grande encontrado hasta el momento, para identificar si se debe crear un dulce especial
           }
         }
-        runType = candy.type; // Se actualiza el tipo de dulce cuando no se encuentra coincidencia
-        runStart = c; // y se actualiza la posición de inicio de la secuencia
+        if (c < cols) {
+          runType = candy.type; // Se actualiza el tipo de dulce cuando no se encuentra coincidencia
+          runStart = c; // y se actualiza la posición de inicio de la secuencia
+        }
       }
     }
   }
@@ -572,13 +576,15 @@ function checkPattern() { // Función para buscar patrones en el tablero
     let runStart = 0;
     let runType = null;
 
-    for (let r = 0; r < rows; r++) {
-      let candy = board.read(r, c);
+    for (let r = 0; r <= rows; r++) {
+      let candy = r < rows ? board.read(r, c) : null;
 
       if (runType === null) {
-        runType = candy.type;
-        runStart = r;
-      } else if (candy.type !== runType) {
+        if (r < rows) {
+          runType = candy.type;
+          runStart = r;
+        }
+      } else if (r === rows || candy.type !== runType) {
         if (r - runStart >= 3) {
           let positions = [];
           for (let i = runStart; i < r; i++) {
@@ -589,8 +595,10 @@ function checkPattern() { // Función para buscar patrones en el tablero
             setPatternInfo("línea", positions.length, positions);
           }
         }
-        runType = candy.type;
-        runStart = r;
+        if (r < rows) {
+          runType = candy.type;
+          runStart = r;
+        }
       }
     }
   }
