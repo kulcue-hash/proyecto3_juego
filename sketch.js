@@ -193,9 +193,9 @@ image(
     }
     pop();
   }
-  activate(board){
-        // Un dulce normal no hace nada
-    }
+  activate(board, row, col){
+    return false; // Un dulce normal no tiene poderes especiales
+  }
 }
 
 // Implementación de Herencias para dulces especiales
@@ -260,67 +260,95 @@ image(
 }
 
 // CLASE BOMBA DE COLOR (HEREDA DE CANDY)
-class ColorBomb extends Candy{
-  constructor(){
-    // Llamada al constructor de la clase padre con un tipo especial (-1) para indicar que es una bomba de color
+class ColorBomb extends Candy {
+  constructor() {
+    // Llamada al constructor de la clase padre con un tipo especial (-1)
+    // Los dulces normales estan numerados del 0 a 4
     super(-1);
   }
-  display({row,col}){
+
+  // Metodo que dibuja  la bomba y anima los movimientos
+  display({ row, col }) {
     let cellLength = Quadrille.cellLength;
     let offsetX = 0;
     let offsetY = this.fallOffsetY;
+    
     // Animación de caída
-    if(abs(this.fallOffsetY)>0.5){
-      this.fallOffsetY = lerp(this.fallOffsetY,0,0.1);
-    }
-    else{
+    if (abs(this.fallOffsetY) > 0.5) {
+      this.fallOffsetY = lerp(this.fallOffsetY, 0, 0.1); // Lerp suaviza el movimiento
+    } else {
       this.fallOffsetY = 0;
     }
+    
     // Animación de intercambio
-    if(swapAnimation){
+    if (swapAnimation) {
       let t = constrain(
-        (millis()-swapAnimation.startTime)/animationDuration,
-        0,1);
-      if(this===swapAnimation.candy1){
-        offsetX = lerp(0,swapAnimation.dx,t);
-        offsetY += lerp(0,swapAnimation.dy,t);
+        (millis() - swapAnimation.startTime) / animationDuration,
+        0, 1
+      );
+      if (this === swapAnimation.candy1) {
+        offsetX = lerp(0, swapAnimation.dx, t);
+        offsetY += lerp(0, swapAnimation.dy, t);
       }
-      if(this===swapAnimation.candy2){
-        offsetX = lerp(0,-swapAnimation.dx,t);
-        offsetY += lerp(0,-swapAnimation.dy,t);
+      if (this === swapAnimation.candy2) {
+        offsetX = lerp(0, -swapAnimation.dx, t);
+        offsetY += lerp(0, -swapAnimation.dy, t);
       }
     }
+    // Se dibuja la bomba donde le corresponde
     push();
-    translate(offsetX,offsetY);
+    translate(offsetX, offsetY);
+
+    // Circulo de selección para la bomba
+    if (selected && selected.r === row && selected.c === col) {
+      stroke(255);
+      strokeWeight(4);
+      noFill();
+      circle(
+        cellLength / 2,
+        cellLength / 2,
+        cellLength * 0.9
+      );
+    }
+
     imageMode(CENTER);
     image(
       bombImage,
-      cellLength/2,
-      cellLength/2,
-      cellLength*0.90,
-      cellLength*0.90
-  );
+      cellLength / 2,
+      cellLength / 2,
+      cellLength * 0.90,
+      cellLength * 0.90
+    );
     pop();
   }
-  explode(){
-    let destroyed = 0;
-    while(destroyed < 20){
-        let rr = floor(random(rows));
-        let cc = floor(random(cols));
+  // Explota la bomba
+  activate(board, row, col) {
+    // La bomba se borra a sí misma de la casilla donde el jugador hizo clic
+    board.fill(row, col, null);
 
-        let candy = board.read(rr,cc);
-        if(
-            candy != null &&
-            !(candy instanceof ColorBomb)
-        ){
-            board.fill(rr,cc,null);
-            destroyed++;
-            points += 10;
-        }
+    // Lógica de explosión aleatoria
+    let destroyed = 0;
+    while (destroyed < 20) {
+      let rr = floor(random(rows));
+      let cc = floor(random(cols));
+
+      let candy = board.read(rr, cc);
+      if (
+        candy != null &&
+        !(candy instanceof ColorBomb)
+      ) {
+        board.fill(rr, cc, null);
+        destroyed++;
+        points += 10;
+      }
     }
     gravityAnimating = true;
+
+    // Devolvemos "true" para avisar que la bomba se activó con éxito
+    return true;
+  }
 }
-}
+
 
 // Función para obtener un tipo de dulce válido que no forme patrones
 function getValidCandy(row, col) {
@@ -601,15 +629,13 @@ function mousePressed() {
         let candy2 = board.read(r, c); //Almacena dulce seleccionado segundo click
 
         // Activar bomba de color
-        if(candy1 instanceof ColorBomb){
-            board.fill(selected.r, selected.c, null);
-            candy1.explode();
+        if (candy1 && candy1.activate(board, selected.r, selected.c)) {
             selected = null;
             return;
         }
-        if(candy2 instanceof ColorBomb){
-            board.fill(r, c, null);
-            candy2.explode();
+        
+        // Hacemos lo mismo para el segundo dulce seleccionado
+        if (candy2 && candy2.activate(board, r, c)) {
             selected = null;
             return;
         }
